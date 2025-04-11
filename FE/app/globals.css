@@ -27,6 +27,8 @@
 
 body {
   @apply bg-background text-foreground;
+  background-color: hsl(240, 10%, 3.9%);
+  color: hsl(0, 0%, 98%);
 }
 
 /* Custom styles for resize handles */
@@ -61,4 +63,22 @@ body {
 
 .cursor-ns-resize {
   cursor: ns-resize;
+}
+
+/* Gradient text animation */
+.animated-gradient-text {
+  background-size: 300% 300%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }

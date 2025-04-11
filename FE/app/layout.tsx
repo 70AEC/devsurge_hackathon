@@ -1,19 +1,20 @@
-import type { Metadata } from 'next'
-import './globals.css'
+import type { ReactNode } from "react"
+import "./globals.css"
+import ClientLayout from "./clientLayout"
+import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: 'devsurge',
-  description: 'Devsurge',
+  title: "Web3 AI Builder",
+  description: "Build smart contracts and dApps with AI assistance",
+  icons: {
+    icon: "/favicon.ico",
+  },
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  )
+interface LayoutProps {
+  children: ReactNode
+}
+
+export default function RootLayout({ children }: LayoutProps) {
+  return <ClientLayout>{children}</ClientLayout>
 }
