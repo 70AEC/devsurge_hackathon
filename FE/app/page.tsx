@@ -11,7 +11,8 @@ export default function LandingPage() {
         <div className="flex flex-col items-center text-center mb-16">
           <div className="inline-block p-2 bg-purple-900/30 rounded-full mb-6">
             <Zap className="h-8 w-8 text-purple-400" />
-          </div>
+          </div> <h1 className="text-7xl md:text-9xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-blue-500">
+          DevSurge</h1>
           <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-blue-500">
             Web3 AI Builder
           </h1>
