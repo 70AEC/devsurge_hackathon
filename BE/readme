@@ -1,0 +1,24 @@
+# Solidity Compiler Backend Server
+
+This server provides a backend API for compiling Solidity smart contracts. It includes the OpenZeppelin library, making it easy to compile standard contracts such as ERC20 and ERC721.
+
+## Installation
+
+```bash
+# Install dependencies
+npm install
+
+# Run the server in development mode
+npm run dev
+
+# Run the server in production mode
+npm start
+
+# Environment Variables
+PORT: Server port (default: 3001)
+
+FRONTEND_URL: Allowed frontend URL for CORS (default: http://localhost:3000)
+
+API Endpoints
+POST /compile
+Compiles Solidity source code.
