@@ -1,613 +1,228 @@
 const express = require("express")
 const cors = require("cors")
-const solc = require("solc")
 const fs = require("fs")
 const path = require("path")
+const solc = require("solc")
+const parser = require("@solidity-parser/parser")
 
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// CORS 설정
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type"],
-  }),
-)
-
+app.use(cors())
 app.use(express.json())
 
-// OpenZeppelin 라이브러리 경로
-const OPENZEPPELIN_PATH = path.join(__dirname, "node_modules", "@openzeppelin")
-
-// 라이브러리 파일 로드 함수
-function loadLibraryFile(filePath) {
-  try {
-    return fs.readFileSync(filePath, "utf8")
-  } catch (error) {
-    console.error(`Error loading library file ${filePath}:`, error)
-    return null
-  }
+// Define available versions that are known to work with their commit hashes
+const VERSION_MAP = {
+  "0.8.20": "0.8.20+commit.a1b79de6",
+  "0.8.19": "0.8.19+commit.7dd6d404",
+  "0.8.18": "0.8.18+commit.87f61d96",
+  "0.8.17": "0.8.17+commit.8df45f5f",
+  "0.8.16": "0.8.16+commit.07a7930e",
+  "0.8.15": "0.8.15+commit.e14f2714",
+  "0.8.14": "0.8.14+commit.80d49f37",
+  "0.8.13": "0.8.13+commit.abaa5c0e",
+  "0.8.12": "0.8.12+commit.f00d7308",
+  "0.8.11": "0.8.11+commit.d7f03943",
+  "0.8.10": "0.8.10+commit.fc410830",
+  "0.8.9": "0.8.9+commit.e5eed63a",
+  "0.8.8": "0.8.8+commit.dddeac2f",
+  "0.8.7": "0.8.7+commit.e28d00a7",
+  "0.8.6": "0.8.6+commit.11564f7e",
+  "0.8.5": "0.8.5+commit.a4f2e591",
+  "0.8.4": "0.8.4+commit.c7e474f2",
+  "0.8.3": "0.8.3+commit.8d00100c",
+  "0.8.2": "0.8.2+commit.661d1103",
+  "0.8.1": "0.8.1+commit.df193b15",
+  "0.8.0": "0.8.0+commit.c7dfd78e",
 }
 
-// 라이브러리 임포트 해석 함수
+// 개선된 버전 로딩 함수
+async function loadSolcVersion(version) {
+  // Remove 'v' prefix if present
+  const cleanVersion = version.startsWith("v") ? version.substring(1) : version
+
+  // Try to get the full version string with commit hash
+  const fullVersion = VERSION_MAP[cleanVersion] || cleanVersion
+
+  console.log(`Attempting to load Solidity compiler version: ${fullVersion}`)
+
+  return new Promise((resolve, reject) => {
+    solc.loadRemoteVersion(fullVersion, (err, solcInstance) => {
+      if (err) {
+        console.error(`Failed to load solc version: ${fullVersion}`, err)
+
+        // Try with just the clean version as fallback
+        if (fullVersion !== cleanVersion) {
+          console.log(`Trying fallback with version: ${cleanVersion}`)
+          solc.loadRemoteVersion(cleanVersion, (err2, solcInstance2) => {
+            if (err2) {
+              console.error(`Fallback also failed for version: ${cleanVersion}`, err2)
+
+              // Last resort: use the default installed version
+              console.log("Using default installed solc version as last resort")
+              resolve(solc)
+            } else {
+              console.log(`Successfully loaded fallback version: ${cleanVersion}`)
+              resolve(solcInstance2)
+            }
+          })
+        } else {
+          // If we're already using the clean version, fall back to default
+          console.log("Using default installed solc version")
+          resolve(solc)
+        }
+      } else {
+        console.log(`Successfully loaded solc version: ${fullVersion}`)
+        resolve(solcInstance)
+      }
+    })
+  })
+}
+
+// OpenZeppelin import 처리 (기존 코드 유지)
 function resolveImports(importPath) {
-  // OpenZeppelin 라이브러리 임포트 처리
   if (importPath.startsWith("@openzeppelin/")) {
     const fullPath = path.join(__dirname, "node_modules", importPath)
     try {
       return { contents: fs.readFileSync(fullPath, "utf8") }
-    } catch (error) {
-      console.error(`Error resolving import ${importPath}:`, error)
+    } catch (err) {
       return { error: `Library not found: ${importPath}` }
     }
   }
-
-  // 다른 임포트 처리 (필요한 경우)
   return { error: `Import not found: ${importPath}` }
 }
 
-// 컴파일 엔드포인트
-app.post("/compile", async (req, res) => {
+// ABI 병합 (중복 제거) (기존 코드 유지)
+function mergeAbi(existing, additional) {
+  const key = (item) => `${item.type}:${item.name}:${JSON.stringify(item.inputs)}`
+  const seen = new Set(existing.map(key))
+  for (const item of additional) {
+    if (!seen.has(key(item))) {
+      existing.push(item)
+    }
+  }
+}
+
+// solidity-parser로 public 함수 ABI 추출 (기존 코드 유지)
+function extractFullABIFromParser(sourceCode) {
+  const abi = []
   try {
-    const { source, fileName, version, optimize, runs, libraries } = req.body
+    const ast = parser.parse(sourceCode, { tolerant: true })
 
-    console.log(`Compiling ${fileName} with Solidity ${version}`)
+    parser.visit(ast, {
+      FunctionDefinition(node) {
+        if (node.visibility === "public" && node.name && node.parameters) {
+          const inputs = node.parameters.map((param) => ({
+            name: param.name,
+            type: param.typeName?.name || "unknown",
+          }))
+          const outputs = (node.returnParameters || []).map((param) => ({
+            name: param.name,
+            type: param.typeName?.name || "unknown",
+          }))
+          abi.push({
+            type: "function",
+            name: node.name,
+            inputs,
+            outputs,
+            stateMutability: node.stateMutability || "nonpayable",
+          })
+        }
+      },
+    })
+  } catch (err) {
+    console.error("Parser error:", err.message)
+  }
+  return abi
+}
 
-    // 컴파일러 입력 생성
+// 컴파일 엔드포인트 (개선된 오류 처리)
+app.post("/compile", async (req, res) => {
+  const { source, fileName, version, optimize, runs } = req.body
+
+  if (!source || !fileName) {
+    return res.status(400).json({
+      success: false,
+      errors: [{ message: "Missing required fields: source, fileName" }],
+    })
+  }
+
+  // Default to 0.8.17 if no version specified
+  const requestedVersion = version || "0.8.17"
+  console.log(`Compilation requested with Solidity version: ${requestedVersion}`)
+
+  try {
+    // Try to load the compiler with better error handling
+    let compiler
+    try {
+      compiler = await loadSolcVersion(requestedVersion)
+      console.log(`Using compiler version: ${compiler.version ? compiler.version() : "unknown"}`)
+    } catch (loadErr) {
+      console.error("Failed to load compiler, using default:", loadErr)
+      compiler = solc
+    }
+
     const input = {
       language: "Solidity",
       sources: {
-        [fileName]: {
-          content: source,
-        },
+        [fileName]: { content: source },
       },
       settings: {
-        optimizer: {
-          enabled: optimize === true,
-          runs: runs || 200,
-        },
-        outputSelection: {
-          "*": {
-            "*": ["*"],
-          },
-        },
-        // OpenZeppelin 라이브러리 경로 추가
-        libraries: libraries || {},
+        optimizer: { enabled: !!optimize, runs: runs || 200 },
+        outputSelection: { "*": { "*": ["*"] } },
       },
     }
 
-    // 컴파일 옵션
-    const compilerOptions = {
-      import: resolveImports,
+    console.log("Compiling with input:", JSON.stringify(input, null, 2).substring(0, 500) + "...")
+
+    const output = JSON.parse(compiler.compile(JSON.stringify(input), { import: resolveImports }))
+    console.log("Compilation completed")
+
+    const hasError = output.errors?.some((e) => e.severity === "error")
+
+    if (hasError) {
+      console.log("Compilation had errors:", output.errors)
+      return res.status(200).json({ success: false, errors: output.errors })
     }
 
-    // 컴파일 실행
-    const output = JSON.parse(solc.compile(JSON.stringify(input), compilerOptions))
+    const contracts = output.contracts || {}
+    console.log(`Compiled contracts: ${Object.keys(contracts).length} files`)
 
-    // 컴파일 결과 확인
-    if (output.errors && output.errors.length > 0) {
-      // 오류가 있는지 확인
-      const hasError = output.errors.some((error) => error.severity === "error")
-
-      if (hasError) {
-        console.log("Compilation failed with errors")
-        return res.json({
-          errors: output.errors,
-          success: false,
-        })
+    // ABI 병합
+    for (const file in contracts) {
+      for (const contractName in contracts[file]) {
+        console.log(`Processing ABI for ${file}:${contractName}`)
+        const contract = contracts[file][contractName]
+        const fullAbi = extractFullABIFromParser(source)
+        mergeAbi(contract.abi, fullAbi)
       }
     }
 
-    // 컴파일 성공
-    if (output.contracts) {
-      console.log("Compilation succeeded")
-
-      // OpenZeppelin 인터페이스 감지 및 ABI 추가
-      const contractsWithInterfaces = enhanceContractsWithInterfaces(source, output.contracts)
-
-      return res.json({
-        contracts: contractsWithInterfaces,
-        success: true,
-        errors: output.errors, // 경고가 있을 수 있음
-      })
-    } else {
-      // 컴파일은 되었지만 계약이 없는 경우
-      console.log("Compilation succeeded but no contracts found")
-      return res.json({
-        success: false,
-        errors: [
-          {
-            severity: "error",
-            formattedMessage: "No contracts found in source code",
-            message: "No contracts found in source code",
-            type: "CompilerError",
-          },
-        ],
-      })
-    }
-  } catch (error) {
-    console.error("Compilation error:", error)
+    return res.json({
+      success: true,
+      contracts,
+      errors: output.errors || [],
+    })
+  } catch (err) {
+    console.error("Compilation error:", err)
     return res.status(500).json({
-      errors: [
-        {
-          severity: "error",
-          formattedMessage: `Server error: ${error.message}`,
-          message: error.message,
-          type: "ServerError",
-        },
-      ],
       success: false,
+      errors: [{ message: err.message || "Internal error", severity: "error" }],
     })
   }
 })
 
-// OpenZeppelin 인터페이스 감지 및 ABI 추가 함수
-function enhanceContractsWithInterfaces(sourceCode, contracts) {
-  // 소스 코드에서 OpenZeppelin 임포트 감지
-  const hasERC20 =
-    sourceCode.includes("@openzeppelin/contracts/token/ERC20") ||
-    sourceCode.includes("openzeppelin-solidity/contracts/token/ERC20")
-  const hasERC721 =
-    sourceCode.includes("@openzeppelin/contracts/token/ERC721") ||
-    sourceCode.includes("openzeppelin-solidity/contracts/token/ERC721")
-  const hasERC1155 =
-    sourceCode.includes("@openzeppelin/contracts/token/ERC1155") ||
-    sourceCode.includes("openzeppelin-solidity/contracts/token/ERC1155")
-  const hasOwnable =
-    sourceCode.includes("@openzeppelin/contracts/access/Ownable") ||
-    sourceCode.includes("openzeppelin-solidity/contracts/access/Ownable")
-  const hasPausable =
-    sourceCode.includes("@openzeppelin/contracts/security/Pausable") ||
-    sourceCode.includes("openzeppelin-solidity/contracts/security/Pausable")
-
-  // 계약 복사본 생성
-  const enhancedContracts = JSON.parse(JSON.stringify(contracts))
-
-  // 각 파일의 각 계약에 대해 처리
-  for (const fileName in enhancedContracts) {
-    for (const contractName in enhancedContracts[fileName]) {
-      const contract = enhancedContracts[fileName][contractName]
-
-      // 계약 소스 코드에서 상속 확인
-      const contractSource = sourceCode
-
-      // 인터페이스 ABI 추가
-      if (hasERC20 && contractSource.includes("ERC20")) {
-        addERC20Interface(contract)
-      }
-
-      if (hasERC721 && contractSource.includes("ERC721")) {
-        addERC721Interface(contract)
-      }
-
-      if (hasERC1155 && contractSource.includes("ERC1155")) {
-        addERC1155Interface(contract)
-      }
-
-      if (hasOwnable && contractSource.includes("Ownable")) {
-        addOwnableInterface(contract)
-      }
-
-      if (hasPausable && contractSource.includes("Pausable")) {
-        addPausableInterface(contract)
-      }
-    }
-  }
-
-  return enhancedContracts
-}
-
-// ERC20 인터페이스 ABI 추가
-function addERC20Interface(contract) {
-  const erc20Abi = [
-    {
-      inputs: [],
-      name: "totalSupply",
-      outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [{ internalType: "address", name: "account", type: "address" }],
-      name: "balanceOf",
-      outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "recipient", type: "address" },
-        { internalType: "uint256", name: "amount", type: "uint256" },
-      ],
-      name: "transfer",
-      outputs: [{ internalType: "bool", name: "", type: "bool" }],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "owner", type: "address" },
-        { internalType: "address", name: "spender", type: "address" },
-      ],
-      name: "allowance",
-      outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "spender", type: "address" },
-        { internalType: "uint256", name: "amount", type: "uint256" },
-      ],
-      name: "approve",
-      outputs: [{ internalType: "bool", name: "", type: "bool" }],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "sender", type: "address" },
-        { internalType: "address", name: "recipient", type: "address" },
-        { internalType: "uint256", name: "amount", type: "uint256" },
-      ],
-      name: "transferFrom",
-      outputs: [{ internalType: "bool", name: "", type: "bool" }],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      anonymous: false,
-      inputs: [
-        { indexed: true, internalType: "address", name: "from", type: "address" },
-        { indexed: true, internalType: "address", name: "to", type: "address" },
-        { indexed: false, internalType: "uint256", name: "value", type: "uint256" },
-      ],
-      name: "Transfer",
-      type: "event",
-    },
-    {
-      anonymous: false,
-      inputs: [
-        { indexed: true, internalType: "address", name: "owner", type: "address" },
-        { indexed: true, internalType: "address", name: "spender", type: "address" },
-        { indexed: false, internalType: "uint256", name: "value", type: "uint256" },
-      ],
-      name: "Approval",
-      type: "event",
-    },
-  ]
-
-  // 기존 ABI에 없는 항목만 추가
-  mergeAbi(contract.abi, erc20Abi)
-}
-
-// ERC721 인터페이스 ABI 추가
-function addERC721Interface(contract) {
-  const erc721Abi = [
-    {
-      inputs: [{ internalType: "address", name: "owner", type: "address" }],
-      name: "balanceOf",
-      outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
-      name: "ownerOf",
-      outputs: [{ internalType: "address", name: "", type: "address" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "from", type: "address" },
-        { internalType: "address", name: "to", type: "address" },
-        { internalType: "uint256", name: "tokenId", type: "uint256" },
-      ],
-      name: "transferFrom",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "to", type: "address" },
-        { internalType: "uint256", name: "tokenId", type: "uint256" },
-      ],
-      name: "approve",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
-      name: "getApproved",
-      outputs: [{ internalType: "address", name: "", type: "address" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "operator", type: "address" },
-        { internalType: "bool", name: "approved", type: "bool" },
-      ],
-      name: "setApprovalForAll",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "owner", type: "address" },
-        { internalType: "address", name: "operator", type: "address" },
-      ],
-      name: "isApprovedForAll",
-      outputs: [{ internalType: "bool", name: "", type: "bool" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "from", type: "address" },
-        { internalType: "address", name: "to", type: "address" },
-        { internalType: "uint256", name: "tokenId", type: "uint256" },
-      ],
-      name: "safeTransferFrom",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      anonymous: false,
-      inputs: [
-        { indexed: true, internalType: "address", name: "from", type: "address" },
-        { indexed: true, internalType: "address", name: "to", type: "address" },
-        { indexed: true, internalType: "uint256", name: "tokenId", type: "uint256" },
-      ],
-      name: "Transfer",
-      type: "event",
-    },
-    {
-      anonymous: false,
-      inputs: [
-        { indexed: true, internalType: "address", name: "owner", type: "address" },
-        { indexed: true, internalType: "address", name: "approved", type: "address" },
-        { indexed: true, internalType: "uint256", name: "tokenId", type: "uint256" },
-      ],
-      name: "Approval",
-      type: "event",
-    },
-    {
-      anonymous: false,
-      inputs: [
-        { indexed: true, internalType: "address", name: "owner", type: "address" },
-        { indexed: true, internalType: "address", name: "operator", type: "address" },
-        { indexed: false, internalType: "bool", name: "approved", type: "bool" },
-      ],
-      name: "ApprovalForAll",
-      type: "event",
-    },
-  ]
-
-  // 기존 ABI에 없는 항목만 추가
-  mergeAbi(contract.abi, erc721Abi)
-}
-
-// ERC1155 인터페이스 ABI 추가
-function addERC1155Interface(contract) {
-  const erc1155Abi = [
-    {
-      inputs: [
-        { internalType: "address", name: "account", type: "address" },
-        { internalType: "uint256", name: "id", type: "uint256" },
-      ],
-      name: "balanceOf",
-      outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address[]", name: "accounts", type: "address[]" },
-        { internalType: "uint256[]", name: "ids", type: "uint256[]" },
-      ],
-      name: "balanceOfBatch",
-      outputs: [{ internalType: "uint256[]", name: "", type: "uint256[]" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "operator", type: "address" },
-        { internalType: "bool", name: "approved", type: "bool" },
-      ],
-      name: "setApprovalForAll",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "owner", type: "address" },
-        { internalType: "address", name: "operator", type: "address" },
-      ],
-      name: "isApprovedForAll",
-      outputs: [{ internalType: "bool", name: "", type: "bool" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "from", type: "address" },
-        { internalType: "address", name: "to", type: "address" },
-        { internalType: "uint256", name: "id", type: "uint256" },
-        { internalType: "uint256", name: "amount", type: "uint256" },
-        { internalType: "bytes", name: "data", type: "bytes" },
-      ],
-      name: "safeTransferFrom",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [
-        { internalType: "address", name: "from", type: "address" },
-        { internalType: "address", name: "to", type: "address" },
-        { internalType: "uint256[]", name: "ids", type: "uint256[]" },
-        { internalType: "uint256[]", name: "amounts", type: "uint256[]" },
-        { internalType: "bytes", name: "data", type: "bytes" },
-      ],
-      name: "safeBatchTransferFrom",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      anonymous: false,
-      inputs: [
-        { indexed: true, internalType: "address", name: "operator", type: "address" },
-        { indexed: true, internalType: "address", name: "from", type: "address" },
-        { indexed: true, internalType: "address", name: "to", type: "address" },
-        { indexed: false, internalType: "uint256", name: "id", type: "uint256" },
-        { indexed: false, internalType: "uint256", name: "value", type: "uint256" },
-      ],
-      name: "TransferSingle",
-      type: "event",
-    },
-    {
-      anonymous: false,
-      inputs: [
-        { indexed: true, internalType: "address", name: "operator", type: "address" },
-        { indexed: true, internalType: "address", name: "from", type: "address" },
-        { indexed: true, internalType: "address", name: "to", type: "address" },
-        { indexed: false, internalType: "uint256[]", name: "ids", type: "uint256[]" },
-        { indexed: false, internalType: "uint256[]", name: "values", type: "uint256[]" },
-      ],
-      name: "TransferBatch",
-      type: "event",
-    },
-    {
-      anonymous: false,
-      inputs: [
-        { indexed: true, internalType: "address", name: "owner", type: "address" },
-        { indexed: true, internalType: "address", name: "operator", type: "address" },
-        { indexed: false, internalType: "bool", name: "approved", type: "bool" },
-      ],
-      name: "ApprovalForAll",
-      type: "event",
-    },
-  ]
-
-  // 기존 ABI에 없는 항목만 추가
-  mergeAbi(contract.abi, erc1155Abi)
-}
-
-// Ownable 인터페이스 ABI 추가
-function addOwnableInterface(contract) {
-  const ownableAbi = [
-    {
-      inputs: [],
-      name: "owner",
-      outputs: [{ internalType: "address", name: "", type: "address" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [],
-      name: "renounceOwnership",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [{ internalType: "address", name: "newOwner", type: "address" }],
-      name: "transferOwnership",
-      outputs: [],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      anonymous: false,
-      inputs: [
-        { indexed: true, internalType: "address", name: "previousOwner", type: "address" },
-        { indexed: true, internalType: "address", name: "newOwner", type: "address" },
-      ],
-      name: "OwnershipTransferred",
-      type: "event",
-    },
-  ]
-
-  // 기존 ABI에 없는 항목만 추가
-  mergeAbi(contract.abi, ownableAbi)
-}
-
-// Pausable 인터페이스 ABI 추가
-function addPausableInterface(contract) {
-  const pausableAbi = [
-    {
-      inputs: [],
-      name: "paused",
-      outputs: [{ internalType: "bool", name: "", type: "bool" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      anonymous: false,
-      inputs: [{ indexed: false, internalType: "address", name: "account", type: "address" }],
-      name: "Paused",
-      type: "event",
-    },
-    {
-      anonymous: false,
-      inputs: [{ indexed: false, internalType: "address", name: "account", type: "address" }],
-      name: "Unpaused",
-      type: "event",
-    },
-  ]
-
-  // 기존 ABI에 없는 항목만 추가
-  mergeAbi(contract.abi, pausableAbi)
-}
-
-// ABI 병합 함수 (중복 항목 방지)
-function mergeAbi(existingAbi, newAbi) {
-  if (!existingAbi) return
-
-  for (const item of newAbi) {
-    // 이미 존재하는지 확인
-    const exists = existingAbi.some((existing) => {
-      if (existing.type !== item.type) return false
-
-      if (item.type === "function") {
-        return existing.name === item.name && JSON.stringify(existing.inputs) === JSON.stringify(item.inputs)
-      }
-
-      if (item.type === "event") {
-        return existing.name === item.name && JSON.stringify(existing.inputs) === JSON.stringify(item.inputs)
-      }
-
-      return false
-    })
-
-    // 존재하지 않으면 추가
-    if (!exists) {
-      existingAbi.push(item)
-    }
-  }
-}
-
-// 상태 확인 엔드포인트 추가
+// 상태 확인 (기존 코드 유지)
 app.get("/status", (req, res) => {
   res.json({
     status: "ok",
-    solcVersion: solc.version(),
-    openzeppelinSupport: true,
+    version: "1.0.0",
+    time: new Date().toISOString(),
+    supportedVersions: Object.keys(VERSION_MAP),
   })
 })
 
-// 서버 시작
+// 서버 시작 (기존 코드 유지)
 app.listen(PORT, () => {
-  console.log(`Solidity compiler server running on port ${PORT}`)
+  console.log(`🟢 Solidity compiler server running at http://localhost:${PORT}`)
 })

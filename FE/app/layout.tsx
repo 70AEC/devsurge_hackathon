@@ -1,7 +1,6 @@
-import type { ReactNode } from "react"
-import "./globals.css"
-import ClientLayout from "./clientLayout"
+import type React from "react"
 import type { Metadata } from "next"
+import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Web3 AI Builder",
@@ -11,10 +10,14 @@ export const metadata: Metadata = {
   },
 }
 
-interface LayoutProps {
-  children: ReactNode
-}
-
-export default function RootLayout({ children }: LayoutProps) {
-  return <ClientLayout>{children}</ClientLayout>
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
 }

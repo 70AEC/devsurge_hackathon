@@ -1,69 +1,206 @@
 "use client"
 
-import { ArrowRight, Code, Coins, Database, Zap } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import Link from "next/link"
+import type React from "react"
 
-export default function LandingPage() {
+import { useState } from "react"
+import { Sidebar } from "@/components/sidebar"
+import { Chat } from "@/components/chat"
+import { CodePanel } from "@/components/code-panel"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+// Define types for chat messages
+type ChatRole = "user" | "assistant"
+
+interface ChatMessage {
+  role: ChatRole
+  content: string
+}
+
+interface AIResponse {
+  text: string
+  code?: {
+    language: string
+    content: string
+    fileName?: string
+  }[]
+}
+
+export default function Home() {
+  const [activeTab, setActiveTab] = useState<"remix" | "code" | "preview">("remix")
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [generatedCode, setGeneratedCode] = useState<Record<string, string>>({})
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [topPanelHeight, setTopPanelHeight] = useState(50) // percentage
+  const [isDragging, setIsDragging] = useState(false)
+
+  // Fake AI service
+  const callAIService = async (prompt: string): Promise<AIResponse> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (prompt.toLowerCase().includes("nft") || prompt.toLowerCase().includes("token")) {
+          resolve({
+            text: "Here is an example of an NFT contract following the ERC721 standard with minting functionality.",
+            code: [
+              {
+                language: "solidity",
+                fileName: "MyNFT.sol",
+                content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
+
+contract MyNFT is ERC721URIStorage, Ownable {
+  using Strings for uint256;
+
+  uint256 private _nextTokenId;
+  uint256 public mintPrice = 0.05 ether;
+  string public baseURI;
+
+  constructor(address initialOwner) ERC721("MyNFT", "MNFT") Ownable(initialOwner) {}
+
+  function mint() public payable {
+    require(msg.value >= mintPrice, "Insufficient payment");
+    uint256 tokenId = _nextTokenId++;
+    _safeMint(msg.sender, tokenId);
+    _setTokenURI(tokenId, string(abi.encodePacked(baseURI, tokenId.toString(), ".json")));
+  }
+
+  function setBaseURI(string memory _newBaseURI) public onlyOwner {
+    baseURI = _newBaseURI;
+  }
+
+  function setMintPrice(uint256 _newPrice) public onlyOwner {
+    mintPrice = _newPrice;
+  }
+
+  function withdraw() public onlyOwner {
+    payable(owner()).transfer(address(this).balance);
+  }
+}`,
+              },
+            ],
+          })
+        } else {
+          resolve({
+            text: "What kind of smart contract would you like to create? Let me know if it's an NFT, token, DAO, DeFi, etc.",
+          })
+        }
+      }, 1500)
+    })
+  }
+
+  const handleSendMessage = async (message: string) => {
+    const updatedMessages: ChatMessage[] = [...messages, { role: "user", content: message }]
+    setMessages(updatedMessages)
+    setIsLoading(true)
+
+    try {
+      const aiResponse = await callAIService(message)
+
+      setMessages([...updatedMessages, { role: "assistant", content: aiResponse.text }])
+
+      if (aiResponse.code && aiResponse.code.length > 0) {
+        const newGeneratedCode = { ...generatedCode }
+
+        aiResponse.code.forEach((codeBlock) => {
+          if (codeBlock.fileName) {
+            newGeneratedCode[codeBlock.fileName] = codeBlock.content
+          }
+        })
+
+        setGeneratedCode(newGeneratedCode)
+        setActiveTab("remix")
+      }
+    } catch (error) {
+      console.error("AI service error:", error)
+
+      setMessages([
+        ...updatedMessages,
+        {
+          role: "assistant",
+          content: "Sorry, an error occurred while processing your request. Please try again.",
+        },
+      ])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen)
+  }
+
+  const handleMouseDown = () => {
+    setIsDragging(true)
+    document.body.style.userSelect = "none"
+  }
+
+  const handleMouseUp = () => {
+    setIsDragging(false)
+    document.body.style.userSelect = ""
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return
+
+    const container = e.currentTarget as HTMLDivElement
+    const containerRect = container.getBoundingClientRect()
+    const newTopPanelHeight = ((e.clientY - containerRect.top) / containerRect.height) * 100
+
+    // Limit height between 20% and 80%
+    if (newTopPanelHeight >= 20 && newTopPanelHeight <= 80) {
+      setTopPanelHeight(newTopPanelHeight)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white">
-      <div className="container mx-auto px-4 py-20">
-        <div className="flex flex-col items-center text-center mb-16">
-          <div className="inline-block p-2 bg-purple-900/30 rounded-full mb-6">
-            <Zap className="h-8 w-8 text-purple-400" />
-          </div> <h1 className="text-7xl md:text-9xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-blue-500">
-          DevSurge</h1>
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-blue-500">
-            Web3 AI Builder
-          </h1>
-          <p className="text-xl md:text-2xl text-gray-300 max-w-3xl mb-8">
-            Build smart contracts and dApps with AI assistance, powered by custom RAG for participant revenue generation
-          </p>
-          <Link href="/main">
-            <Button className="text-lg px-8 py-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-full">
-              Launch Platform <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
-          <div className="bg-gray-800/50 p-8 rounded-xl border border-gray-700 hover:border-purple-500 transition-all">
-            <div className="bg-purple-900/30 p-3 rounded-lg inline-block mb-4">
-              <Code className="h-6 w-6 text-purple-400" />
-            </div>
-            <h3 className="text-xl font-bold mb-3">AI-Powered Development</h3>
-            <p className="text-gray-400">
-              Create smart contracts and frontend code with AI assistance. Get suggestions, debug help, and optimization
-              tips.
-            </p>
+    <div className="flex h-screen bg-gradient-to-br from-gray-900 to-black text-white overflow-hidden">
+      {/* Sidebar */}
+      <div className={`h-full transition-all duration-300 ${isSidebarOpen ? "w-64" : "w-0"}`}>
+        {isSidebarOpen && <Sidebar />}
+      </div>
+
+      {/* Main content */}
+      <div className="flex flex-col flex-1 h-full relative">
+        {/* Sidebar toggle button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-4 left-0 z-10 bg-gray-800 rounded-r-full rounded-l-none border-l-0 border-gray-700"
+          onClick={toggleSidebar}
+        >
+          {isSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </Button>
+
+        {/* Split view with resizable panels */}
+        <div
+          className="flex flex-col h-full"
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          {/* Top panel */}
+          <div className="overflow-hidden" style={{ height: `${topPanelHeight}%` }}>
+            <Chat messages={messages} onSendMessage={handleSendMessage} isLoading={isLoading} />
           </div>
-          <div className="bg-gray-800/50 p-8 rounded-xl border border-gray-700 hover:border-purple-500 transition-all">
-            <div className="bg-purple-900/30 p-3 rounded-lg inline-block mb-4">
-              <Database className="h-6 w-6 text-purple-400" />
-            </div>
-            <h3 className="text-xl font-bold mb-3">Custom RAG System</h3>
-            <p className="text-gray-400">
-              Leverage our custom Retrieval-Augmented Generation system to access the latest Web3 knowledge and best
-              practices.
-            </p>
+
+          {/* Resize handle */}
+          <div
+            className="h-2 bg-gray-800 hover:bg-purple-500 cursor-ns-resize flex items-center justify-center"
+            onMouseDown={handleMouseDown}
+          >
+            <div className="w-10 h-1 bg-gray-600 rounded-full"></div>
           </div>
-          <div className="bg-gray-800/50 p-8 rounded-xl border border-gray-700 hover:border-purple-500 transition-all">
-            <div className="bg-purple-900/30 p-3 rounded-lg inline-block mb-4">
-              <Coins className="h-6 w-6 text-purple-400" />
-            </div>
-            <h3 className="text-xl font-bold mb-3">Revenue Generation</h3>
-            <p className="text-gray-400">
-              Participants can earn rewards by contributing to the knowledge base and helping others build better Web3
-              applications.
-            </p>
+
+          {/* Bottom panel */}
+          <div className="flex-1 overflow-hidden" style={{ height: `${100 - topPanelHeight}%` }}>
+            <CodePanel activeTab={activeTab} setActiveTab={setActiveTab} generatedCode={generatedCode} />
           </div>
-        </div>
-        <div className="text-center">
-          <p className="text-gray-400 mb-6">Ready to revolutionize your Web3 development workflow?</p>
-          <Link href="/main">
-            <Button variant="outline" className="text-white border-purple-500 hover:bg-purple-500/20">
-              Get Started Now
-            </Button>
-          </Link>
         </div>
       </div>
     </div>

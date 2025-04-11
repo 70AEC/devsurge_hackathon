@@ -12,44 +12,57 @@ export function useSolidityCompiler(initialCode: string) {
   const [compiledContracts, setCompiledContracts] = useState<Record<string, any>>({})
   const [selectedContract, setSelectedContract] = useState<string>("")
   const [isServerConnected, setIsServerConnected] = useState<boolean | null>(null)
+  const [availableVersions, setAvailableVersions] = useState<string[]>([
+    "0.8.20",
+    "0.8.19",
+    "0.8.18",
+    "0.8.17",
+    "0.8.16",
+    "0.8.15",
+    "0.8.14",
+    "0.8.13",
+    "0.8.12",
+    "0.8.11",
+    "0.8.10",
+  ])
 
-  const COMPILER_SERVER_URL = process.env.NEXT_PUBLIC_COMPILER_SERVER_URL || "http://localhost:3001/compile"
+  const checkServerStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/status")
+      if (!response.ok) {
+        setIsServerConnected(false)
+        throw new Error(`Server error: ${response.status}`)
+      }
+      const data = await response.json()
+
+      // If the server returns supported versions, use those
+      if (data.supportedVersions && Array.isArray(data.supportedVersions)) {
+        setAvailableVersions(data.supportedVersions)
+      }
+
+      setIsServerConnected(true)
+      return data
+    } catch (error: unknown) {
+      console.error("Error checking server status:", error)
+      setIsServerConnected(false)
+
+      let errorMessage = "Could not connect to the compiler server"
+      if (error instanceof Error) {
+        errorMessage += `: ${error.message}`
+      }
+
+      toast({
+        title: "Compiler Server Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+      return null
+    }
+  }, [])
 
   useEffect(() => {
-    const checkServerStatus = async () => {
-      try {
-        const statusUrl = COMPILER_SERVER_URL.replace("/compile", "/status")
-        const response = await fetch(statusUrl, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setIsServerConnected(true)
-          toast({
-            title: "Compiler Server Connected",
-            description: `Using Solidity compiler v${data.solcVersion || "0.8.17"}`,
-          })
-        } else {
-          setIsServerConnected(false)
-          throw new Error(`Server error: ${response.status}`)
-        }
-      } catch (error: unknown) {
-        console.error("Error checking server status:", error)
-        setIsServerConnected(false)
-        toast({
-          title: "Compiler Server Error",
-          description: "Could not connect to the compiler server. Make sure it's running.",
-          variant: "destructive",
-        })
-      }
-    }
-
     checkServerStatus()
-  }, [COMPILER_SERVER_URL])
+  }, [checkServerStatus])
 
   const compile = useCallback(
     async (sourceCode: string, fileName: string): Promise<boolean> => {
@@ -71,6 +84,12 @@ export function useSolidityCompiler(initialCode: string) {
       setSelectedContract("")
 
       try {
+        // Format the version correctly for solc
+        // Remove the "v" prefix if it exists
+        const formattedVersion = compilerVersion.startsWith("v") ? compilerVersion.substring(1) : compilerVersion
+
+        console.log(`Compiling with Solidity version: ${formattedVersion}`)
+
         const response = await fetch("/api/compile", {
           method: "POST",
           headers: {
@@ -79,18 +98,9 @@ export function useSolidityCompiler(initialCode: string) {
           body: JSON.stringify({
             source: sourceCode,
             fileName: fileName,
-            version: compilerVersion,
+            version: formattedVersion,
             optimize: optimizationEnabled,
             runs: 200,
-            libraries: {
-              useOpenZeppelin: true,
-              paths: [
-                "@openzeppelin/contracts/token/ERC721",
-                "@openzeppelin/contracts/token/ERC20",
-                "@openzeppelin/contracts/access",
-                "@openzeppelin/contracts/utils",
-              ],
-            },
           }),
         })
 
@@ -167,36 +177,8 @@ export function useSolidityCompiler(initialCode: string) {
         setIsCompiling(false)
       }
     },
-    [compilerVersion, isCompiling, optimizationEnabled, COMPILER_SERVER_URL, isServerConnected],
+    [compilerVersion, isCompiling, optimizationEnabled, isServerConnected],
   )
-
-  const checkServerStatus = useCallback(async () => {
-    try {
-      const response = await fetch("/api/status")
-      if (!response.ok) {
-        setIsServerConnected(false)
-        throw new Error(`Server error: ${response.status}`)
-      }
-      const data = await response.json()
-      setIsServerConnected(true)
-      return data
-    } catch (error: unknown) {
-      console.error("Error checking server status:", error)
-      setIsServerConnected(false)
-
-      let errorMessage = "Could not connect to the compiler server"
-      if (error instanceof Error) {
-        errorMessage += `: ${error.message}`
-      }
-
-      toast({
-        title: "Compiler Server Error",
-        description: errorMessage,
-        variant: "destructive",
-      })
-      return null
-    }
-  }, [])
 
   return {
     isCompiling,
@@ -207,6 +189,7 @@ export function useSolidityCompiler(initialCode: string) {
     compiledContracts,
     selectedContract,
     isServerConnected,
+    availableVersions,
     compile,
     setCompilerVersion,
     setOptimizationEnabled,

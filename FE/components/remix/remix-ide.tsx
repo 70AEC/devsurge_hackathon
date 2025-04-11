@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "@/components/ui/use-toast"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 
 // Import hooks
 import { useFileManager } from "@/hooks/use-file-manager"
-import { useSolidityCompiler } from "@/hooks/use-compiler-solidity"
+import { useSolidityCompiler } from "@/hooks/use-solidity-compiler"
 import { useWalletConnector } from "@/hooks/use-wallet-connector"
 import { useContractDeployer } from "@/hooks/use-contract-deployer"
 import { useClipboard } from "@/hooks/use-clipboard"
@@ -23,22 +23,28 @@ import { ServerStatusIndicator } from "./server-status-indicator"
 
 // Define types for window extensions
 declare global {
-    interface Window {
-      ethereum?: {
-        request: (args: { method: string; params?: any[] }) => Promise<any>;
-        on: (event: string, callback: (...args: any[]) => void) => void;
-        removeListener: (event: string, callback: (...args: any[]) => void) => void;
-        isMetaMask?: boolean;
-      };
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: any[] }) => Promise<any>
+      on: (event: string, callback: (...args: any[]) => void) => void
+      removeListener: (event: string, callback: (...args: any[]) => void) => void
+      isMetaMask?: boolean
     }
   }
-  
+}
 
 interface RemixIDEProps {
   initialCode: string
+  generatedFiles?: Record<string, string>
 }
 
-export function RemixIDE({ initialCode }: RemixIDEProps) {
+interface SimpleABIData {
+  contractName: string
+  abi: any
+  bytecode: string
+}
+
+export function RemixIDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
   // Use custom hooks
   const fileManager = useFileManager(initialCode)
   const compiler = useSolidityCompiler(initialCode)
@@ -59,11 +65,35 @@ export function RemixIDE({ initialCode }: RemixIDEProps) {
 
   // New simple ABI modal state
   const [showSimpleABIModal, setShowSimpleABIModal] = useState(false)
-  const [simpleABIData, setSimpleABIData] = useState<{
-    contractName: string
-    abi: any
-    bytecode: string
-  } | null>(null)
+  const [simpleABIData, setSimpleABIData] = useState<SimpleABIData | null>(null)
+
+  // 생성된 파일이 있으면 파일 매니저에 추가하는 부분 수정
+  useEffect(() => {
+    if (generatedFiles && Object.keys(generatedFiles).length > 0) {
+      // 각 생성된 파일을 파일 매니저에 추가
+      Object.entries(generatedFiles).forEach(([fileName, content]) => {
+        // 파일이 이미 존재하는지 확인
+        if (!fileManager.files[fileName]) {
+          fileManager.createFile(fileName)
+          // 파일 생성 후 내용 업데이트
+          setTimeout(() => {
+            fileManager.updateFileContent(fileName, content)
+          }, 0)
+        }
+      })
+
+      // 첫 번째 파일을 활성화
+      const firstFileName = Object.keys(generatedFiles)[0]
+      if (firstFileName) {
+        fileManager.selectFile(firstFileName)
+      }
+
+      toast({
+        title: "파일 로드 완료",
+        description: `${Object.keys(generatedFiles).length}개의 파일이 로드되었습니다.`,
+      })
+    }
+  }, [generatedFiles, fileManager])
 
   // Compile handler
   const handleCompile = () => {
@@ -175,10 +205,13 @@ export function RemixIDE({ initialCode }: RemixIDEProps) {
           <select
             className="w-full bg-gray-800 border border-gray-700 rounded-md text-sm p-1.5 text-white"
             value={compiler.compilerVersion}
-            onChange={(e) => compiler.setCompilerVersion(e.target.value)}
+            onChange={(e) => {
+              console.log(`Changed compiler version to: ${e.target.value}`)
+              compiler.setCompilerVersion(e.target.value)
+            }}
             disabled={compiler.isCompiling}
           >
-            {["0.8.20", "0.8.19", "0.8.18", "0.8.17", "0.8.16", "0.8.15"].map((version) => (
+            {compiler.availableVersions.map((version) => (
               <option key={version} value={version}>
                 {version}
               </option>

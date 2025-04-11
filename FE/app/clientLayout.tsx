@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, type ReactNode } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { usePathname } from "next/navigation"
 import "./globals.css"
@@ -25,30 +25,14 @@ export default function ClientLayout({ children }: LayoutProps) {
     setSidebarCollapsed(!sidebarCollapsed)
   }
 
-  const childrenArray = Array.isArray(children) ? children : [children]
-
   const renderMainPageLayout = () => {
+    // For the main page, we expect exactly 3 children: Sidebar, Chat, and CodePanel
+    const childrenArray = Array.isArray(children) ? children : [children]
+    
+    // Extract the components
     const sidebar = childrenArray[0]
-    const content = childrenArray[1]
-
-    const getContentChildren = () => {
-      if (!content) return { chatSection: null, codePanel: null }
-
-      if (content && typeof content === "object" && "props" in content && content.props && content.props.children) {
-        const contentChildren = Array.isArray(content.props.children)
-          ? content.props.children
-          : [content.props.children]
-
-        return {
-          chatSection: contentChildren[0] || null,
-          codePanel: contentChildren[1] || null,
-        }
-      }
-
-      return { chatSection: null, codePanel: null }
-    }
-
-    const { chatSection, codePanel } = getContentChildren()
+    const chat = childrenArray[1]
+    const codePanel = childrenArray[2]
 
     return (
       <div className="flex h-screen bg-gradient-to-br from-gray-900 to-black text-white">
@@ -83,20 +67,25 @@ export default function ClientLayout({ children }: LayoutProps) {
         {/* Main content */}
         <div className="flex flex-col flex-1 h-screen relative">
           {/* Chat section */}
-          <div className="flex-shrink-0 overflow-hidden" style={{ height: `${chatHeight}%` }}>
-            {chatSection}
+          <div 
+            className="flex-shrink-0 overflow-hidden" 
+            style={{ height: `${chatHeight}%` }}
+          >
+            {chat}
           </div>
 
           {/* Resize handle */}
           <div
             ref={chatResizeRef}
-            className="h-1 w-full cursor-ns-resize hover:bg-purple-500 flex items-center justify-center"
+            className="h-1 w-full cursor-ns-resize hover:bg-purple-500 flex items-center justify-center z-10"
           >
             <div className="w-8 h-1 bg-gray-700 hover:bg-purple-500 rounded-full"></div>
           </div>
 
           {/* Code panel */}
-          <div className="flex-1 overflow-hidden">{codePanel}</div>
+          <div className="flex-1 overflow-hidden">
+            {codePanel}
+          </div>
         </div>
       </div>
     )
@@ -117,21 +106,23 @@ export default function ClientLayout({ children }: LayoutProps) {
     let startHeight = 0
     let startWidth = 0
 
-    const onMouseDown = (e: MouseEvent, type: "chat" | "sidebar") => {
-      if (type === "chat") {
-        isResizingChat = true
-        startY = e.clientY
-        startHeight = chatHeight
-      } else {
-        isResizingSidebar = true
-        startX = e.clientX
-        startWidth = sidebarWidth
-      }
-      document.body.style.cursor = type === "chat" ? "ns-resize" : "ew-resize"
+    const chatMouseDown = (e: { clientY: number }) => {
+      isResizingChat = true
+      startY = e.clientY
+      startHeight = chatHeight
+      document.body.style.cursor = "ns-resize"
       document.body.style.userSelect = "none"
     }
 
-    const onMouseMove = (e: MouseEvent) => {
+    const sidebarMouseDown = (e: { clientX: number }) => {
+      isResizingSidebar = true
+      startX = e.clientX
+      startWidth = sidebarWidth
+      document.body.style.cursor = "ew-resize"
+      document.body.style.userSelect = "none"
+    }
+
+    const onMouseMove = (e: { clientY: number; clientX: number }) => {
       if (isResizingChat) {
         const containerHeight = window.innerHeight
         const deltaY = e.clientY - startY
@@ -161,14 +152,14 @@ export default function ClientLayout({ children }: LayoutProps) {
       document.body.style.userSelect = ""
     }
 
-    chatResizeHandler.addEventListener("mousedown", (e) => onMouseDown(e, "chat"))
-    sidebarResizeHandler.addEventListener("mousedown", (e) => onMouseDown(e, "sidebar"))
+    chatResizeHandler.addEventListener("mousedown", chatMouseDown)
+    sidebarResizeHandler.addEventListener("mousedown", sidebarMouseDown)
     document.addEventListener("mousemove", onMouseMove)
     document.addEventListener("mouseup", onMouseUp)
 
     return () => {
-      chatResizeHandler.removeEventListener("mousedown", (e) => onMouseDown(e, "chat"))
-      sidebarResizeHandler.removeEventListener("mousedown", (e) => onMouseDown(e, "sidebar"))
+      chatResizeHandler.removeEventListener("mousedown", chatMouseDown)
+      sidebarResizeHandler.removeEventListener("mousedown", sidebarMouseDown)
       document.removeEventListener("mousemove", onMouseMove)
       document.removeEventListener("mouseup", onMouseUp)
     }
