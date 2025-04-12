@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react"
 import { toast } from "@/components/ui/use-toast"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
+import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi"
 
 // Import hooks
 import { useFileManager } from "@/hooks/use-file-manager"
 import { useSolidityCompiler } from "@/hooks/use-solidity-compiler"
-import { useWalletConnector } from "@/hooks/use-wallet-connector"
+import { useWallet } from "@/hooks/use-wallet"
 import { useContractDeployer } from "@/hooks/use-contract-deployer"
 import { useClipboard } from "@/hooks/use-clipboard"
 
@@ -20,18 +21,6 @@ import { DeployModal } from "./deploy-modal"
 import { ContractDetailsModal } from "./contract-details-modal"
 import { SimpleABIModal } from "./simple-abi-modal"
 import { ServerStatusIndicator } from "./server-status-indicator"
-
-// Define types for window extensions
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>
-      on: (event: string, callback: (...args: any[]) => void) => void
-      removeListener: (event: string, callback: (...args: any[]) => void) => void
-      isMetaMask?: boolean
-    }
-  }
-}
 
 interface RemixIDEProps {
   initialCode: string
@@ -48,9 +37,15 @@ export function RemixIDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
   // Use custom hooks
   const fileManager = useFileManager(initialCode)
   const compiler = useSolidityCompiler(initialCode)
-  const wallet = useWalletConnector()
+  const wallet = useWallet()
   const deployer = useContractDeployer()
   const { copyToClipboard } = useClipboard()
+
+  // Wagmi hooks
+  const { address, isConnected } = useAccount()
+  const chainId = useChainId()
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
 
   // Deployed contract details modal
   const [showABIModal, setShowABIModal] = useState(false)
@@ -124,10 +119,10 @@ export function RemixIDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
         return
       }
 
-      // Execute deployment
+      // Execute deployment using Wagmi
       await deployer.deployContract(
-        wallet.signer,
-        wallet.provider,
+        walletClient,
+        publicClient,
         compiler.selectedContract,
         compiler.compiledContracts,
         wallet.deploymentNetwork,
@@ -309,8 +304,8 @@ export function RemixIDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
           <SolidityCompiler />
 
           <DeploymentPanel
-            walletConnected={wallet.walletConnected}
-            account={wallet.account}
+            walletConnected={isConnected}
+            account={address}
             deploymentNetwork={wallet.deploymentNetwork}
             compiledContracts={compiler.compiledContracts}
             selectedContract={compiler.selectedContract}

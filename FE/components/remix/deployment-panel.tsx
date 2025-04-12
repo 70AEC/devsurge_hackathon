@@ -6,7 +6,7 @@ import { AccordionContent, AccordionItem, AccordionTrigger } from "@/components/
 
 interface DeploymentPanelProps {
   walletConnected: boolean
-  account: string | null
+  account: `0x${string}` | undefined // 타입 수정: string | null -> `0x${string}` | undefined
   deploymentNetwork: string
   compiledContracts: Record<string, any>
   selectedContract: string
