@@ -17,7 +17,6 @@ interface CodePanelProps {
 }
 
 export function CodePanel({ activeTab, setActiveTab, generatedCode = {} }: CodePanelProps) {
-  // 생성된 코드가 있으면 사용, 없으면 기본 코드 사용
   const [initialCode, setInitialCode] = useState(`// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
@@ -33,10 +32,10 @@ contract SimpleStorage {
     }
 }`)
 
-  // generatedCode가 변경되면 initialCode 업데이트
+  const [nextFiles, setNextFiles] = useState<Record<string, string>>({})
+
   useEffect(() => {
     if (generatedCode && Object.keys(generatedCode).length > 0) {
-      // 첫 번째 파일의 내용을 사용
       const firstFileName = Object.keys(generatedCode)[0]
       if (firstFileName) {
         setInitialCode(generatedCode[firstFileName])
@@ -44,86 +43,26 @@ contract SimpleStorage {
     }
   }, [generatedCode])
 
-  // Function to download project files
   const downloadProject = async () => {
     try {
-      // Create a new JSZip instance
       const zip = new JSZip()
 
-      // Add files to the zip based on the current tab
       if (activeTab === "code") {
-        // Add Next.js files
-        zip.file(
-          "package.json",
-          JSON.stringify(
-            {
-              name: "nextjs-nft-dapp",
-              version: "0.1.0",
-              private: true,
-              scripts: {
-                dev: "next dev",
-                build: "next build",
-                start: "next start",
-              },
-              dependencies: {
-                next: "15.2.4",
-                react: "^19",
-                "react-dom": "^19",
-              },
-            },
-            null,
-            2,
-          ),
-        )
-
-        // Create directories
-        const appDir = zip.folder("app")!
-        const componentsDir = zip.folder("components")!
-        const uiDir = componentsDir.folder("ui")!
-
-        // Add files to directories
-        appDir.file(
-          "page.tsx",
-          `export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <h1>Hello World</h1>
-    </main>
-  )
-}`,
-        )
-
-        appDir.file(
-          "layout.tsx",
-          `export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  )
-}`,
-        )
+        // zip에 현재 nextFiles 넣기
+        Object.entries(nextFiles).forEach(([filePath, content]) => {
+          zip.file(filePath, content)
+        })
       } else if (activeTab === "remix") {
-        // Add Solidity files
         if (generatedCode && Object.keys(generatedCode).length > 0) {
-          // Add all generated Solidity files
           Object.entries(generatedCode).forEach(([fileName, content]) => {
             zip.file(fileName, content)
           })
         } else {
-          // Add default Solidity file
           zip.file("SimpleStorage.sol", initialCode)
         }
       }
 
-      // Generate the zip file
       const content = await zip.generateAsync({ type: "blob" })
-
-      // Save the zip file with appropriate name
       const zipName = activeTab === "code" ? "nextjs-project.zip" : "solidity-project.zip"
       FileSaver.saveAs(content, zipName)
     } catch (error) {
@@ -133,31 +72,18 @@ contract SimpleStorage {
 
   return (
     <div className="flex flex-col h-full w-full bg-gray-900">
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as any)}
-        className="flex flex-col h-full w-full"
-      >
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="flex flex-col h-full w-full">
         <div className="border-b border-gray-800 px-4 flex justify-between items-center">
           <TabsList className="bg-transparent border-b-0">
-            <TabsTrigger
-              value="remix"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-purple-500 rounded-none"
-            >
+            <TabsTrigger value="remix" className="data-[state=active]:border-b-2 data-[state=active]:border-purple-500 rounded-none">
               <Code className="h-4 w-4 mr-2" />
               Remix IDE
             </TabsTrigger>
-            <TabsTrigger
-              value="code"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-purple-500 rounded-none"
-            >
+            <TabsTrigger value="code" className="data-[state=active]:border-b-2 data-[state=active]:border-purple-500 rounded-none">
               <FileCode className="h-4 w-4 mr-2" />
               Next.js
             </TabsTrigger>
-            <TabsTrigger
-              value="preview"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-purple-500 rounded-none"
-            >
+            <TabsTrigger value="preview" className="data-[state=active]:border-b-2 data-[state=active]:border-purple-500 rounded-none">
               <Play className="h-4 w-4 mr-2" />
               Preview
             </TabsTrigger>
@@ -182,11 +108,11 @@ contract SimpleStorage {
         </TabsContent>
 
         <TabsContent value="code" className="flex-1 overflow-hidden m-0 p-0 h-full">
-          <NextJSCode />
+          <NextJSCode onFilesChange={setNextFiles} />
         </TabsContent>
 
         <TabsContent value="preview" className="flex-1 overflow-hidden m-0 p-0 h-full">
-          <PreviewPanel />
+          <PreviewPanel files={nextFiles} />
         </TabsContent>
       </Tabs>
     </div>

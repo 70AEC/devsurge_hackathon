@@ -6,59 +6,27 @@ import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 
-export function PreviewPanel() {
-  // FileContext 의존성 제거
-  const [files, setFiles] = useState<Record<string, string>>({})
+interface PreviewPanelProps {
+  files: Record<string, string>
+  onFileChange?: (files: Record<string, string>) => void
+}
+
+export function PreviewPanel({ files }: PreviewPanelProps) {
   const [iframeHeight, setIframeHeight] = useState("100%")
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [previewUrl, setPreviewUrl] = useState("")
-  const [projectId, setProjectId] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const filesRef = useRef<Record<string, string>>({})
 
-  // 파일 데이터 가져오기 (localStorage 또는 다른 상태 관리 방식에서)
+  // Keep latest files in ref
   useEffect(() => {
-    // 예시: localStorage에서 파일 데이터 가져오기
-    try {
-      const savedFiles = localStorage.getItem("remix-files")
-      if (savedFiles) {
-        setFiles(JSON.parse(savedFiles))
-      } else {
-        // 기본 파일 설정
-        setFiles({
-          "app/page.tsx": `export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <h1 className="text-4xl font-bold">Welcome to Next.js</h1>
-      <p>Edit app/page.tsx and save to see your changes!</p>
-    </main>
-  )
-}`,
-          "app/layout.tsx": `export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  )
-}`,
-        })
-      }
-    } catch (error) {
-      console.error("Error loading files:", error)
-      // 기본 파일 설정
-      setFiles({
-        "app/page.tsx": `export default function Home() {
-  return <div>Hello World</div>
-}`,
-      })
+    if (files && Object.keys(files).length > 0) {
+      filesRef.current = files
     }
-  }, [])
+  }, [files])
 
-  // Adjust iframe height on window resize
+  // Resize iframe on window resize
   useEffect(() => {
     const handleResize = () => {
       setIframeHeight(`${window.innerHeight - 100}px`)
@@ -69,76 +37,54 @@ export function PreviewPanel() {
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
-  // 컴포넌트 마운트 시 프리뷰 초기화
+  // Initialize preview on mount
   useEffect(() => {
-    if (Object.keys(files).length > 0) {
+    if (files && Object.keys(files).length > 0) {
       initializePreview()
     }
 
-    // 컴포넌트 언마운트 시 프로젝트 정리
+    // Stop preview on unmount
     return () => {
-      if (projectId) {
-        fetch("/api/preview/stop", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId }),
-        }).catch((err) => console.error("Failed to stop preview project:", err))
-      }
+      fetch("/api/preview/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      }).catch((err) => console.error("Failed to stop preview:", err))
+    }
+  }, [])
+
+  // Update preview when files change
+  useEffect(() => {
+    if (files && Object.keys(files).length > 0) {
+      updatePreview()
     }
   }, [files])
 
-  // 파일이 변경될 때 프리뷰 업데이트
-  useEffect(() => {
-    // 파일 변경 감지 로직 (예: localStorage 이벤트 리스너)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "remix-files" && projectId) {
-        try {
-          const updatedFiles = JSON.parse(e.newValue || "{}")
-          setFiles(updatedFiles)
-          updatePreview(updatedFiles)
-        } catch (error) {
-          console.error("Error parsing updated files:", error)
-        }
-      }
-    }
-
-    window.addEventListener("storage", handleStorageChange)
-    return () => window.removeEventListener("storage", handleStorageChange)
-  }, [projectId])
-
-  // 프리뷰 초기화
   const initializePreview = async () => {
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/preview", {
+      const res = await fetch("/api/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files }),
+        body: JSON.stringify({ files: filesRef.current }),
       })
 
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`)
-      }
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`)
 
-      const data = await response.json()
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
 
-      if (data.error) {
-        throw new Error(data.error)
-      }
-
-      setProjectId(data.projectId)
       setPreviewUrl(data.url)
 
       toast({
         title: "Preview Ready",
-        description: "Next.js development server started successfully",
+        description: "Next.js server started successfully!",
       })
-    } catch (error) {
-      console.error("Failed to initialize preview:", error)
+    } catch (err: any) {
+      console.error("Preview init error:", err)
       toast({
         title: "Preview Error",
-        description: error instanceof Error ? error.message : "Failed to start preview server",
+        description: err.message || "Failed to start preview server",
         variant: "destructive",
       })
     } finally {
@@ -146,43 +92,34 @@ export function PreviewPanel() {
     }
   }
 
-  // 프리뷰 업데이트
-  const updatePreview = async (updatedFiles?: Record<string, string>) => {
-    if (!projectId) return
-
+  const updatePreview = async () => {
     setIsRefreshing(true)
 
     try {
-      const response = await fetch("/api/preview", {
+      const res = await fetch("/api/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files: updatedFiles || files, projectId }),
+        body: JSON.stringify({ files: filesRef.current }),
       })
 
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`)
-      }
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`)
 
-      const data = await response.json()
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
 
-      if (data.error) {
-        throw new Error(data.error)
-      }
-
-      // iframe 새로고침
       if (iframeRef.current) {
         iframeRef.current.src = data.url
       }
 
       toast({
         title: "Preview Updated",
-        description: "Changes applied to preview",
+        description: "Preview server updated with latest changes",
       })
-    } catch (error) {
-      console.error("Failed to update preview:", error)
+    } catch (err: any) {
+      console.error("Preview update error:", err)
       toast({
         title: "Update Error",
-        description: error instanceof Error ? error.message : "Failed to update preview",
+        description: err.message || "Failed to update preview",
         variant: "destructive",
       })
     } finally {
@@ -190,16 +127,14 @@ export function PreviewPanel() {
     }
   }
 
-  // 수동 새로고침
   const refreshPreview = () => {
     if (iframeRef.current) {
       iframeRef.current.src = iframeRef.current.src
+      setIsRefreshing(true)
+      setTimeout(() => setIsRefreshing(false), 1000)
     }
-    setIsRefreshing(true)
-    setTimeout(() => setIsRefreshing(false), 1000)
   }
 
-  // 새 창에서 열기
   const openInNewWindow = () => {
     if (previewUrl) {
       window.open(previewUrl, "_blank")
@@ -233,6 +168,7 @@ export function PreviewPanel() {
           </Button>
         </div>
       </div>
+
       <div className="flex-1 w-full relative bg-white">
         {isLoading ? (
           <div className="h-full w-full flex flex-col items-center justify-center bg-gray-900 p-4">
@@ -259,7 +195,7 @@ export function PreviewPanel() {
         ) : (
           <div className="h-full w-full flex items-center justify-center bg-gray-900">
             <div className="text-center p-4">
-              <p className="text-red-400 mb-2">Failed to start preview server</p>
+              <p className="text-red-400 mb-2">❌ Failed to start preview server</p>
               <Button onClick={initializePreview} variant="outline">
                 Try Again
               </Button>
