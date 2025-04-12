@@ -1,22 +1,23 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Code, Play, FileCode } from "lucide-react"
+import { Code, Play, FileCode, Download } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 import { IDE } from "./ide/ide"
 import { NextJSCode } from "./nextjs/nextjs-code"
 import { PreviewPanel } from "./preview/preview-panel"
-import type { Project } from "@/hooks/project/types"
+import JSZip from "jszip"
+import FileSaver from "file-saver"
 
 interface CodePanelProps {
   activeTab: "remix" | "code" | "preview"
   setActiveTab: (tab: "remix" | "code" | "preview") => void
-  activeProject: Project | null
-  onUpdateFile: (projectId: string, fileName: string, content: string) => void
+  generatedCode?: Record<string, string>
 }
 
-export function CodePanel({ activeTab, setActiveTab, activeProject, onUpdateFile }: CodePanelProps) {
-  // 활성 프로젝트의 파일 및 초기 코드 설정
+export function CodePanel({ activeTab, setActiveTab, generatedCode = {} }: CodePanelProps) {
+  // 생성된 코드가 있으면 사용, 없으면 기본 코드 사용
   const [initialCode, setInitialCode] = useState(`// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
@@ -32,28 +33,101 @@ contract SimpleStorage {
     }
 }`)
 
-  // 활성 프로젝트가 변경될 때 초기 코드 업데이트
+  // generatedCode가 변경되면 initialCode 업데이트
   useEffect(() => {
-    if (activeProject) {
-      console.log("CodePanel: Active project changed to:", activeProject.name)
-      console.log("CodePanel: Project files:", Object.keys(activeProject.files))
-
-      const lastOpenedFile = activeProject.lastOpenedFile || Object.keys(activeProject.files)[0]
-      if (lastOpenedFile && activeProject.files[lastOpenedFile]) {
-        console.log("CodePanel: Setting initial code from file:", lastOpenedFile)
-        setInitialCode(activeProject.files[lastOpenedFile])
-      } else {
-        console.warn("CodePanel: Could not find lastOpenedFile or any file in the project")
+    if (generatedCode && Object.keys(generatedCode).length > 0) {
+      // 첫 번째 파일의 내용을 사용
+      const firstFileName = Object.keys(generatedCode)[0]
+      if (firstFileName) {
+        setInitialCode(generatedCode[firstFileName])
       }
-    } else {
-      console.log("CodePanel: No active project")
     }
-  }, [activeProject])
+  }, [generatedCode])
 
-  // 파일 내용 업데이트 핸들러
-  const handleUpdateFile = (fileName: string, content: string) => {
-    if (activeProject) {
-      onUpdateFile(activeProject.id, fileName, content)
+  // Function to download project files
+  const downloadProject = async () => {
+    try {
+      // Create a new JSZip instance
+      const zip = new JSZip()
+
+      // Add files to the zip based on the current tab
+      if (activeTab === "code") {
+        // Add Next.js files
+        zip.file(
+          "package.json",
+          JSON.stringify(
+            {
+              name: "nextjs-nft-dapp",
+              version: "0.1.0",
+              private: true,
+              scripts: {
+                dev: "next dev",
+                build: "next build",
+                start: "next start",
+              },
+              dependencies: {
+                next: "15.2.4",
+                react: "^19",
+                "react-dom": "^19",
+              },
+            },
+            null,
+            2,
+          ),
+        )
+
+        // Create directories
+        const appDir = zip.folder("app")!
+        const componentsDir = zip.folder("components")!
+        const uiDir = componentsDir.folder("ui")!
+
+        // Add files to directories
+        appDir.file(
+          "page.tsx",
+          `export default function Home() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <h1>Hello World</h1>
+    </main>
+  )
+}`,
+        )
+
+        appDir.file(
+          "layout.tsx",
+          `export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
+}`,
+        )
+      } else if (activeTab === "remix") {
+        // Add Solidity files
+        if (generatedCode && Object.keys(generatedCode).length > 0) {
+          // Add all generated Solidity files
+          Object.entries(generatedCode).forEach(([fileName, content]) => {
+            zip.file(fileName, content)
+          })
+        } else {
+          // Add default Solidity file
+          zip.file("SimpleStorage.sol", initialCode)
+        }
+      }
+
+      // Generate the zip file
+      const content = await zip.generateAsync({ type: "blob" })
+
+      // Save the zip file with appropriate name
+      const zipName = activeTab === "code" ? "nextjs-project.zip" : "solidity-project.zip"
+      FileSaver.saveAs(content, zipName)
+    } catch (error) {
+      console.error("Error downloading project:", error)
     }
   }
 
@@ -64,7 +138,7 @@ contract SimpleStorage {
         onValueChange={(value) => setActiveTab(value as any)}
         className="flex flex-col h-full w-full"
       >
-        <div className="border-b border-gray-800 px-4">
+        <div className="border-b border-gray-800 px-4 flex justify-between items-center">
           <TabsList className="bg-transparent border-b-0">
             <TabsTrigger
               value="remix"
@@ -88,16 +162,22 @@ contract SimpleStorage {
               Preview
             </TabsTrigger>
           </TabsList>
+
+          <Button
+            onClick={downloadProject}
+            variant="outline"
+            size="sm"
+            className="bg-gray-800 border-gray-700 hover:bg-gray-700"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Download
+          </Button>
         </div>
 
         <TabsContent value="remix" className="flex-1 overflow-hidden m-0 p-0 h-full">
-          {/* key 속성 추가: 프로젝트 ID가 변경될 때마다 컴포넌트를 다시 마운트 */}
           <IDE
-            key={activeProject?.id || "no-project"}
             initialCode={initialCode}
-            generatedFiles={activeProject?.files || {}}
-            onUpdateFile={handleUpdateFile}
-            activeProject={activeProject}
+            generatedFiles={Object.keys(generatedCode).length > 0 ? generatedCode : undefined}
           />
         </TabsContent>
 
