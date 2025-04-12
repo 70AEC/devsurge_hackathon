@@ -16,8 +16,10 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [previewUrl, setPreviewUrl] = useState("")
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const filesRef = useRef<Record<string, string>>({})
+  const [retryCount, setRetryCount] = useState(0)
 
   // Keep latest files in ref
   useEffect(() => {
@@ -45,7 +47,7 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
 
     // Stop preview on unmount
     return () => {
-      fetch("/api/preview/stop", {
+      fetch("http://localhost:4000/preview/stop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       }).catch((err) => console.error("Failed to stop preview:", err))
@@ -61,19 +63,34 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
 
   const initializePreview = async () => {
     setIsLoading(true)
+    setPreviewError(null)
 
     try {
-      const res = await fetch("/api/preview", {
+      // Make sure we have required files
+      const requiredFiles = ["app/page.tsx", "app/layout.tsx", "app/globals.css"]
+      const missingFiles = requiredFiles.filter((file) => !filesRef.current[file])
+
+      if (missingFiles.length > 0) {
+        throw new Error(`Missing required files: ${missingFiles.join(", ")}`)
+      }
+
+      console.log("Starting preview with files:", Object.keys(filesRef.current))
+
+      const res = await fetch("http://localhost:4000/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ files: filesRef.current }),
       })
 
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`)
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`Server responded with ${res.status}: ${errorText}`)
+      }
 
       const data = await res.json()
       if (data.error) throw new Error(data.error)
 
+      console.log("Preview server response:", data)
       setPreviewUrl(data.url)
 
       toast({
@@ -82,6 +99,7 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
       })
     } catch (err: any) {
       console.error("Preview init error:", err)
+      setPreviewError(err.message || "Failed to start preview server")
       toast({
         title: "Preview Error",
         description: err.message || "Failed to start preview server",
@@ -94,21 +112,33 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
 
   const updatePreview = async () => {
     setIsRefreshing(true)
+    setPreviewError(null)
 
     try {
-      const res = await fetch("/api/preview", {
+      console.log("Updating preview with files:", Object.keys(filesRef.current))
+
+      const res = await fetch("http://localhost:4000/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ files: filesRef.current }),
       })
 
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`)
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`Server responded with ${res.status}: ${errorText}`)
+      }
 
       const data = await res.json()
       if (data.error) throw new Error(data.error)
 
-      if (iframeRef.current) {
-        iframeRef.current.src = data.url
+      console.log("Preview update response:", data)
+
+      if (data.url && iframeRef.current) {
+        // Store the URL and update the iframe
+        setPreviewUrl(data.url)
+
+        // Force iframe refresh by changing the src
+        iframeRef.current.src = `${data.url}?t=${Date.now()}`
       }
 
       toast({
@@ -117,6 +147,7 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
       })
     } catch (err: any) {
       console.error("Preview update error:", err)
+      setPreviewError(err.message || "Failed to update preview")
       toast({
         title: "Update Error",
         description: err.message || "Failed to update preview",
@@ -128,11 +159,20 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
   }
 
   const refreshPreview = () => {
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src
+    if (iframeRef.current && previewUrl) {
       setIsRefreshing(true)
+      // Force iframe refresh by adding timestamp to URL
+      iframeRef.current.src = `${previewUrl}?t=${Date.now()}`
       setTimeout(() => setIsRefreshing(false), 1000)
+    } else {
+      // If no preview URL, try to initialize again
+      initializePreview()
     }
+  }
+
+  const retryPreview = () => {
+    setRetryCount((prev) => prev + 1)
+    initializePreview()
   }
 
   const openInNewWindow = () => {
@@ -180,6 +220,16 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
               <Skeleton className="h-4 w-5/6 bg-gray-800" />
             </div>
           </div>
+        ) : previewError ? (
+          <div className="h-full w-full flex items-center justify-center bg-gray-900">
+            <div className="text-center p-4 max-w-md">
+              <p className="text-red-400 mb-2">❌ Preview Error</p>
+              <p className="text-gray-300 mb-4 text-sm whitespace-pre-wrap">{previewError}</p>
+              <Button onClick={retryPreview} variant="outline">
+                Try Again ({retryCount})
+              </Button>
+            </div>
+          </div>
         ) : previewUrl ? (
           <iframe
             ref={iframeRef}
@@ -191,13 +241,17 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
               backgroundColor: "white",
             }}
             title="Next.js Preview"
+            onError={(e) => {
+              console.error("iframe error:", e)
+              setPreviewError("Failed to load preview. The server might not be ready yet.")
+            }}
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center bg-gray-900">
             <div className="text-center p-4">
-              <p className="text-red-400 mb-2">❌ Failed to start preview server</p>
+              <p className="text-red-400 mb-2">❌ No preview URL available</p>
               <Button onClick={initializePreview} variant="outline">
-                Try Again
+                Start Preview
               </Button>
             </div>
           </div>
