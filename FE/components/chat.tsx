@@ -6,6 +6,7 @@ import { useState } from "react"
 import { Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import RagSelector from "@/components/rag/rag-selector"
 
 type ChatRole = "user" | "assistant"
 
@@ -18,9 +19,11 @@ interface ChatProps {
   messages: ChatMessage[]
   onSendMessage: (message: string) => Promise<void>
   isLoading?: boolean
+  onRagSelect?: (mediaUrl: string, creator: string) => void
 }
 
-export function Chat({ messages, onSendMessage, isLoading = false }: ChatProps) {
+
+export function Chat({ messages, onSendMessage, isLoading = false, onRagSelect }: ChatProps) {
   const [input, setInput] = useState("")
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -30,9 +33,19 @@ export function Chat({ messages, onSendMessage, isLoading = false }: ChatProps) 
       setInput("")
     }
   }
+  const handleRagSelection = (items: any[], mediaUrl: string, creator: string) => {
+    if (onRagSelect) {
+      onRagSelect(mediaUrl, creator)
+    }
+  }
 
   return (
+    
     <div className="flex flex-col h-full border-b border-gray-800">
+       {/* ✅ RAG 선택 영역 */}
+       <div className="border-b border-gray-800 p-4">
+        <RagSelector onSelect={handleRagSelection} />
+      </div>
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">

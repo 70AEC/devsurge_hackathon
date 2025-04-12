@@ -11,9 +11,14 @@ interface RagAsset {
   title: string
   description: string
   mediaUrl: string
+  creator: string // ← 추가됨
 }
 
-export default function RagSelector({ onSelect }: { onSelect: (items: any[], mediaUrl: string) => void }){
+export default function RagSelector({
+  onSelect,
+}: {
+  onSelect: (items: any[], mediaUrl: string, creator: string) => void
+}) {
   const [ragList, setRagList] = useState<RagAsset[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -22,11 +27,15 @@ export default function RagSelector({ onSelect }: { onSelect: (items: any[], med
       try {
         const res = await fetch('/api/rags')
         const data = await res.json()
-        console.log('[✅ RAG 불러옴]', data) // ← 콘솔 출력 추가
+        console.log('[✅ RAG 불러옴]', data)
 
         setRagList(data)
       } catch (err) {
-        toast({ title: 'RAG 불러오기 실패', description: String(err), variant: 'destructive' })
+        toast({
+          title: 'RAG 불러오기 실패',
+          description: String(err),
+          variant: 'destructive',
+        })
       } finally {
         setLoading(false)
       }
@@ -35,7 +44,7 @@ export default function RagSelector({ onSelect }: { onSelect: (items: any[], med
     fetchRags()
   }, [])
 
-  const handleSelect = async (mediaUrl: string) => {
+  const handleSelect = async (mediaUrl: string, creator: string) => {
     try {
       const res = await fetch(mediaUrl.replace('ipfs://', 'https://ipfs.io/ipfs/'))
       const rawText = await res.text()
@@ -44,10 +53,18 @@ export default function RagSelector({ onSelect }: { onSelect: (items: any[], med
         .filter(Boolean)
         .map((line) => JSON.parse(line))
 
-        onSelect(parsed, mediaUrl) 
-              toast({ title: '✅ RAG 적용 완료', description: `${parsed.length}개 항목` })
+      onSelect(parsed, mediaUrl, creator)
+      console.log(creator)
+      toast({
+        title: '✅ RAG 적용 완료',
+        description: `${parsed.length}개 항목`,
+      })
     } catch (err) {
-      toast({ title: 'RAG 파싱 실패', description: String(err), variant: 'destructive' })
+      toast({
+        title: 'RAG 파싱 실패',
+        description: String(err),
+        variant: 'destructive',
+      })
     }
   }
 
@@ -61,7 +78,10 @@ export default function RagSelector({ onSelect }: { onSelect: (items: any[], med
             <CardContent className="p-4 space-y-2">
               <p className="font-medium">{rag.title}</p>
               <p className="text-sm text-muted-foreground">{rag.description}</p>
-              <Button variant="outline" onClick={() => handleSelect(rag.mediaUrl)}>
+              <Button
+                variant="outline"
+                onClick={() => handleSelect(rag.mediaUrl, rag.creator)}
+              >
                 적용하기
               </Button>
             </CardContent>

@@ -6,7 +6,7 @@ import { aeneidChain } from '@/lib/story-chains'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactNode, useState } from 'react'
 
-const config = createConfig({
+export const config = createConfig({
   chains: [aeneidChain],
   connectors: [injected()],
   transports: {

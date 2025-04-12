@@ -1,5 +1,6 @@
 import { Plus, Archive, Zap, Code, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import RagUploaderMini from '@/components/rag/rag-uploader-mini'
 
 export function Sidebar() {
   const archivedChats = [
@@ -64,6 +65,8 @@ export function Sidebar() {
           </div>
           <div className="text-sm">Web3 Studio</div>
         </div>
+
+        <RagUploaderMini />
       </div>
     </div>
   )

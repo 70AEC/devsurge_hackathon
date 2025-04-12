@@ -1,6 +1,5 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { Code, Play, FileCode } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IDE } from "./ide/ide"
@@ -13,9 +12,7 @@ interface CodePanelProps {
   generatedCode?: Record<string, string>
 }
 
-export function CodePanel({ activeTab, setActiveTab, generatedCode = {} }: CodePanelProps) {
-  // 생성된 코드가 있으면 사용, 없으면 기본 코드 사용
-  const [initialCode, setInitialCode] = useState(`// SPDX-License-Identifier: MIT
+const DEFAULT_CODE = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
 contract SimpleStorage {
@@ -28,18 +25,12 @@ contract SimpleStorage {
     function get() public view returns (uint256) {
         return storedData;
     }
-}`)
+}`
 
-  // generatedCode가 변경되면 initialCode 업데이트
-  useEffect(() => {
-    if (generatedCode && Object.keys(generatedCode).length > 0) {
-      // 첫 번째 파일의 내용을 사용
-      const firstFileName = Object.keys(generatedCode)[0]
-      if (firstFileName) {
-        setInitialCode(generatedCode[firstFileName])
-      }
-    }
-  }, [generatedCode])
+export function CodePanel({ activeTab, setActiveTab, generatedCode = {} }: CodePanelProps) {
+  // 렌더 시점에 최초 파일의 내용을 계산해서 사용
+  const firstFileName = Object.keys(generatedCode)[0]
+  const initialCode = firstFileName ? generatedCode[firstFileName] : DEFAULT_CODE
 
   return (
     <div className="flex flex-col h-full w-full bg-gray-900">
