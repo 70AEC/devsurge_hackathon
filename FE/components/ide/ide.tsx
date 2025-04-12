@@ -108,7 +108,7 @@ export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
   }
 
   // Deploy handler
-  const handleDeploy = async () => {
+  const handleDeploy = async (constructorArgs: any[] = []) => {
     try {
       // Check compilation before deployment
       if (Object.keys(compiler.compiledContracts).length === 0) {
@@ -121,22 +121,23 @@ export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
       }
 
       // Execute deployment using Wagmi
-      await deployer.deployContract(
+      const success = await deployer.deployContract(
         walletClient,
         publicClient,
         compiler.selectedContract,
         compiler.compiledContracts,
         wallet.deploymentNetwork,
+        constructorArgs, // 생성자 인자 전달
       )
 
       // Show ABI modal automatically on successful deployment
-      if (deployer.deploymentSuccess) {
+      if (success && deployer.deploymentSuccess) {
         handleShowSimpleABIModal(compiler.selectedContract)
       }
     } catch (error) {
       console.error("Deployment error:", error)
       toast({
-        title: "Deployment Error",
+        title: "Deployment Failed",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       })

@@ -67,6 +67,7 @@ export function useContractDeployer() {
       contractName: string,
       compiledContracts: Record<string, any>,
       networkName: string,
+      constructorArgs: any[] = [], // 생성자 인자 추가
     ) => {
       // 로컬 변수 사용 대신 파라미터 사용
       const activeWalletClient = walletClientParam || walletClient
@@ -75,7 +76,7 @@ export function useContractDeployer() {
       if (!activeWalletClient || !activePublicClient || !contractName || !compiledContracts) {
         setDeploymentSuccess(false)
         setDeploymentOutput("Missing information required for deployment.")
-        return
+        return false // 실패 시 false 반환
       }
 
       setIsDeploying(true)
@@ -112,7 +113,17 @@ export function useContractDeployer() {
         // Deployment options
         const deployOptions: any = {
           account: activeWalletClient.account,
+          args: constructorArgs, // 생성자 인자 전달
         }
+
+        // 로그 추가
+        console.log("Deploying contract with options:", {
+          contractName,
+          constructorArgs,
+          account: activeWalletClient.account?.address,
+          chainId,
+          networkName,
+        })
 
         // Set value if needed
         if (Number.parseFloat(value) > 0) {
@@ -123,6 +134,7 @@ export function useContractDeployer() {
                 : valueUnit.toLowerCase() === "gwei"
                   ? parseGwei(value)
                   : BigInt(value) // wei
+            console.log(`Setting value: ${value} ${valueUnit}`)
           } catch (error) {
             console.warn("Invalid value:", error)
           }
@@ -132,6 +144,7 @@ export function useContractDeployer() {
         if (gasPrice) {
           try {
             deployOptions.gasPrice = parseGwei(gasPrice)
+            console.log(`Setting gas price: ${gasPrice} Gwei`)
           } catch (error) {
             console.warn("Invalid gas price:", error)
           }
@@ -141,12 +154,14 @@ export function useContractDeployer() {
         if (gasLimit) {
           try {
             deployOptions.gas = BigInt(gasLimit)
+            console.log(`Setting gas limit: ${gasLimit}`)
           } catch (error) {
             console.warn("Invalid gas limit:", error)
           }
         }
 
         setDeploymentOutput("Deploying contract to network...")
+        console.log("Final deployment options:", deployOptions)
 
         // Deploy contract using Viem
         const hash = await activeWalletClient.deployContract({
@@ -203,6 +218,8 @@ export function useContractDeployer() {
           title: "Deployment Successful",
           description: `Contract deployed at ${contractAddress.substring(0, 8)}...`,
         })
+
+        return true // 성공 시 true 반환
       } catch (error: unknown) {
         console.error("Contract deployment error:", error)
         setDeploymentSuccess(false)
@@ -219,6 +236,8 @@ export function useContractDeployer() {
           description: errorMessage,
           variant: "destructive",
         })
+
+        return false // 실패 시 false 반환
       } finally {
         setIsDeploying(false)
       }

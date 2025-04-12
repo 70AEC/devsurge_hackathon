@@ -2,7 +2,7 @@
 import { Chain } from 'viem'
 
 export const aeneidChain: Chain = {
-    id: 1513,
+    id: 1315,
     name: 'Aeneid Testnet',
     nativeCurrency: {
       name: 'AENE',

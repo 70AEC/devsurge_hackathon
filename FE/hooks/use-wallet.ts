@@ -54,7 +54,7 @@ export function useWallet(): WalletState {
         return "Optimism"
       case 420:
         return "Optimism Goerli"
-      case 1513:
+      case 1315:
         return "Aeneid Testnet"
       case 1337:
       case 31337:
@@ -111,10 +111,10 @@ export function useWallet(): WalletState {
       setDeploymentNetwork(getNetworkName(chainId))
 
       // Check if connected to the correct network (Aeneid)
-      if (chainId !== 1513) {
+      if (chainId !== 1315) {
         toast({
           title: "⚠️ 잘못된 네트워크",
-          description: "Aeneid Testnet(Chain ID 1513)에 연결해주세요.",
+          description: "Aeneid Testnet(Chain ID 1315)에 연결해주세요.",
           variant: "destructive",
         })
       } else {

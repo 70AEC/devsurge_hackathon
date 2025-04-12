@@ -142,6 +142,10 @@ export function useSolidityCompiler(initialCode: string) {
             setCompilationOutput("Compilation successful!")
           }
 
+          // 컴파일된 컨트랙트 정보 로���
+          console.log("Compiled contracts:", result.contracts)
+
+          // 컴파일된 컨트랙트 저장
           setCompiledContracts(result.contracts)
 
           const firstFile = Object.keys(result.contracts)[0]
@@ -149,6 +153,15 @@ export function useSolidityCompiler(initialCode: string) {
             const firstContract = Object.keys(result.contracts[firstFile])[0]
             if (firstContract) {
               setSelectedContract(firstContract)
+
+              // 선택된 컨트랙트의 ABI 로깅
+              console.log("Selected contract ABI:", result.contracts[firstFile][firstContract].abi)
+
+              // 생성자 정보 확인
+              const constructor = result.contracts[firstFile][firstContract].abi.find(
+                (item: any) => item.type === "constructor",
+              )
+              console.log("Constructor info:", constructor)
             }
           }
 
