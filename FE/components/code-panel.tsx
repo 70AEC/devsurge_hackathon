@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Code, Play, FileCode } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { RemixIDE } from "./remix/remix-ide"
+import { IDE } from "./ide/ide"
 import { NextJSCode } from "./nextjs/nextjs-code"
 import { PreviewPanel } from "./preview/preview-panel"
 
@@ -75,7 +75,7 @@ contract SimpleStorage {
         </div>
 
         <TabsContent value="remix" className="flex-1 overflow-hidden m-0 p-0 h-full">
-          <RemixIDE
+          <IDE
             initialCode={initialCode}
             generatedFiles={Object.keys(generatedCode).length > 0 ? generatedCode : undefined}
           />

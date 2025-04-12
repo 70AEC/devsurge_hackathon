@@ -33,7 +33,7 @@ interface SimpleABIData {
   bytecode: string
 }
 
-export function RemixIDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
+export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
   // Use custom hooks
   const fileManager = useFileManager(initialCode)
   const compiler = useSolidityCompiler(initialCode)
