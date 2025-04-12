@@ -2,31 +2,52 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-
-type ChatRole = "user" | "assistant"
-
-interface ChatMessage {
-  role: ChatRole
-  content: string
-}
+import { useProjectManager, type ChatMessage } from "@/hooks/use-project-manager"
 
 interface ChatProps {
-  messages: ChatMessage[]
   onSendMessage: (message: string) => Promise<void>
   isLoading?: boolean
 }
 
-export function Chat({ messages, onSendMessage, isLoading = false }: ChatProps) {
+export function Chat({ onSendMessage, isLoading = false }: ChatProps) {
+  const { activeProject, addChatMessage } = useProjectManager()
   const [input, setInput] = useState("")
+  const [messages, setMessages] = useState<ChatMessage[]>([])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // 활성 프로젝트가 변경될 때 채팅 메시지 업데이트
+  useEffect(() => {
+    if (activeProject) {
+      setMessages(activeProject.messages || [])
+    } else {
+      setMessages([])
+    }
+  }, [activeProject])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (input.trim()) {
-      onSendMessage(input)
+    if (input.trim() && activeProject) {
+      // 사용자 메시지 추가
+      addChatMessage(activeProject.id, {
+        role: "user",
+        content: input,
+      })
+
+      // AI 응답 요청
+      try {
+        await onSendMessage(input)
+      } catch (error) {
+        console.error("Error sending message:", error)
+        // 오류 발생 시 오류 메시지 추가
+        addChatMessage(activeProject.id, {
+          role: "assistant",
+          content: "Sorry, an error occurred while processing your request. Please try again.",
+        })
+      }
+
       setInput("")
     }
   }
@@ -45,16 +66,28 @@ export function Chat({ messages, onSendMessage, isLoading = false }: ChatProps) 
                 existing code to get started.
               </p>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="border border-gray-800 rounded-lg p-3 hover:bg-gray-800 cursor-pointer transition-colors">
+                <div
+                  className="border border-gray-800 rounded-lg p-3 hover:bg-gray-800 cursor-pointer transition-colors"
+                  onClick={() => setInput("Create an ERC721 NFT collection with minting page")}
+                >
                   "Create an ERC721 NFT collection with minting page"
                 </div>
-                <div className="border border-gray-800 rounded-lg p-3 hover:bg-gray-800 cursor-pointer transition-colors">
+                <div
+                  className="border border-gray-800 rounded-lg p-3 hover:bg-gray-800 cursor-pointer transition-colors"
+                  onClick={() => setInput("Build a token swap interface for my DEX contract")}
+                >
                   "Build a token swap interface for my DEX contract"
                 </div>
-                <div className="border border-gray-800 rounded-lg p-3 hover:bg-gray-800 cursor-pointer transition-colors">
+                <div
+                  className="border border-gray-800 rounded-lg p-3 hover:bg-gray-800 cursor-pointer transition-colors"
+                  onClick={() => setInput("Create a DAO voting mechanism with frontend")}
+                >
                   "Create a DAO voting mechanism with frontend"
                 </div>
-                <div className="border border-gray-800 rounded-lg p-3 hover:bg-gray-800 cursor-pointer transition-colors">
+                <div
+                  className="border border-gray-800 rounded-lg p-3 hover:bg-gray-800 cursor-pointer transition-colors"
+                  onClick={() => setInput("Build a staking dApp with rewards tracking")}
+                >
                   "Build a staking dApp with rewards tracking"
                 </div>
               </div>
@@ -86,7 +119,7 @@ export function Chat({ messages, onSendMessage, isLoading = false }: ChatProps) 
           <Button
             type="submit"
             className="bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600"
-            disabled={isLoading}
+            disabled={isLoading || !activeProject}
           >
             {isLoading ? (
               <span className="flex items-center">

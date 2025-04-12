@@ -6,15 +6,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IDE } from "./ide/ide"
 import { NextJSCode } from "./nextjs/nextjs-code"
 import { PreviewPanel } from "./preview/preview-panel"
+import type { Project } from "@/hooks/project/types"
 
 interface CodePanelProps {
   activeTab: "remix" | "code" | "preview"
   setActiveTab: (tab: "remix" | "code" | "preview") => void
-  generatedCode?: Record<string, string>
+  activeProject: Project | null
+  onUpdateFile: (projectId: string, fileName: string, content: string) => void
 }
 
-export function CodePanel({ activeTab, setActiveTab, generatedCode = {} }: CodePanelProps) {
-  // 생성된 코드가 있으면 사용, 없으면 기본 코드 사용
+export function CodePanel({ activeTab, setActiveTab, activeProject, onUpdateFile }: CodePanelProps) {
+  // 활성 프로젝트의 파일 및 초기 코드 설정
   const [initialCode, setInitialCode] = useState(`// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
@@ -30,16 +32,30 @@ contract SimpleStorage {
     }
 }`)
 
-  // generatedCode가 변경되면 initialCode 업데이트
+  // 활성 프로젝트가 변경될 때 초기 코드 업데이트
   useEffect(() => {
-    if (generatedCode && Object.keys(generatedCode).length > 0) {
-      // 첫 번째 파일의 내용을 사용
-      const firstFileName = Object.keys(generatedCode)[0]
-      if (firstFileName) {
-        setInitialCode(generatedCode[firstFileName])
+    if (activeProject) {
+      console.log("CodePanel: Active project changed to:", activeProject.name)
+      console.log("CodePanel: Project files:", Object.keys(activeProject.files))
+
+      const lastOpenedFile = activeProject.lastOpenedFile || Object.keys(activeProject.files)[0]
+      if (lastOpenedFile && activeProject.files[lastOpenedFile]) {
+        console.log("CodePanel: Setting initial code from file:", lastOpenedFile)
+        setInitialCode(activeProject.files[lastOpenedFile])
+      } else {
+        console.warn("CodePanel: Could not find lastOpenedFile or any file in the project")
       }
+    } else {
+      console.log("CodePanel: No active project")
     }
-  }, [generatedCode])
+  }, [activeProject])
+
+  // 파일 내용 업데이트 핸들러
+  const handleUpdateFile = (fileName: string, content: string) => {
+    if (activeProject) {
+      onUpdateFile(activeProject.id, fileName, content)
+    }
+  }
 
   return (
     <div className="flex flex-col h-full w-full bg-gray-900">
@@ -75,9 +91,13 @@ contract SimpleStorage {
         </div>
 
         <TabsContent value="remix" className="flex-1 overflow-hidden m-0 p-0 h-full">
+          {/* key 속성 추가: 프로젝트 ID가 변경될 때마다 컴포넌트를 다시 마운트 */}
           <IDE
+            key={activeProject?.id || "no-project"}
             initialCode={initialCode}
-            generatedFiles={Object.keys(generatedCode).length > 0 ? generatedCode : undefined}
+            generatedFiles={activeProject?.files || {}}
+            onUpdateFile={handleUpdateFile}
+            activeProject={activeProject}
           />
         </TabsContent>
 

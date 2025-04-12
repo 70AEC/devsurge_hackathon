@@ -22,9 +22,14 @@ import { ContractDetailsModal } from "./contract-details-modal"
 import { SimpleABIModal } from "./simple-abi-modal"
 import { ServerStatusIndicator } from "./server-status-indicator"
 
+// Define Project type
+import type { Project } from "@/hooks/project/types"
+
 interface RemixIDEProps {
   initialCode: string
   generatedFiles?: Record<string, string>
+  onUpdateFile?: (fileName: string, content: string) => void
+  activeProject: Project | null
 }
 
 interface SimpleABIData {
@@ -33,9 +38,12 @@ interface SimpleABIData {
   bytecode: string
 }
 
-export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
-  // Use custom hooks
-  const fileManager = useFileManager(initialCode)
+export function IDE({ initialCode, generatedFiles = {}, onUpdateFile, activeProject }: RemixIDEProps) {
+  console.log("IDE: Rendering with project:", activeProject?.id, activeProject?.name)
+  console.log("IDE: Project files:", activeProject?.files ? Object.keys(activeProject.files) : "none")
+
+  // Use custom hooks - 활성 프로젝트 전달
+  const fileManager = useFileManager(initialCode, activeProject)
   const compiler = useSolidityCompiler(initialCode)
   const wallet = useWallet()
   const deployer = useContractDeployer()
@@ -62,13 +70,26 @@ export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
   const [showSimpleABIModal, setShowSimpleABIModal] = useState(false)
   const [simpleABIData, setSimpleABIData] = useState<SimpleABIData | null>(null)
 
+  // 활성 프로젝트가 변경될 때 디버그 로그
+  useEffect(() => {
+    if (activeProject) {
+      console.log("IDE: Active project changed to:", activeProject.name)
+      console.log("IDE: Project files:", Object.keys(activeProject.files))
+      console.log("IDE: FileManager files:", Object.keys(fileManager.files))
+      console.log("IDE: FileManager active file:", fileManager.activeFile)
+    }
+  }, [activeProject, fileManager.files, fileManager.activeFile])
+
   // 생성된 파일이 있으면 파일 매니저에 추가하는 부분 수정
   useEffect(() => {
     if (generatedFiles && Object.keys(generatedFiles).length > 0) {
+      console.log("IDE: Generated files detected:", Object.keys(generatedFiles))
+
       // 각 생성된 파일을 파일 매니저에 추가
       Object.entries(generatedFiles).forEach(([fileName, content]) => {
         // 파일이 이미 존재하는지 확인
         if (!fileManager.files[fileName]) {
+          console.log("IDE: Creating new file from generated code:", fileName)
           fileManager.createFile(fileName)
           // 파일 생성 후 내용 업데이트
           setTimeout(() => {
@@ -80,6 +101,7 @@ export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
       // 첫 번째 파일을 활성화
       const firstFileName = Object.keys(generatedFiles)[0]
       if (firstFileName) {
+        console.log("IDE: Setting active file to first generated file:", firstFileName)
         fileManager.selectFile(firstFileName)
       }
 
@@ -103,6 +125,22 @@ export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
             selectedContract: compiler.selectedContract,
           }),
         )
+
+        console.log("Compilation successful, contracts:", compiler.compiledContracts)
+        console.log("Selected contract:", compiler.selectedContract)
+
+        // 선택된 컨트랙트의 ABI 확인
+        for (const fileName in compiler.compiledContracts) {
+          if (compiler.compiledContracts[fileName][compiler.selectedContract]) {
+            const abi = compiler.compiledContracts[fileName][compiler.selectedContract].abi
+            console.log("Selected contract ABI:", abi)
+
+            // 생성자 정보 확인
+            const constructor = abi.find((item: any) => item.type === "constructor")
+            console.log("Constructor info:", constructor)
+            break
+          }
+        }
       }
     })
   }
@@ -119,6 +157,8 @@ export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
         })
         return
       }
+
+      console.log("Deploying contract with constructor args:", constructorArgs)
 
       // Execute deployment using Wagmi
       const success = await deployer.deployContract(
@@ -147,6 +187,11 @@ export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
   // File save handler
   const handleSaveFile = () => {
     fileManager.saveFile(fileManager.activeFile)
+
+    // 프로젝트 파일 업데이트 콜백 호출
+    if (onUpdateFile && activeProject) {
+      onUpdateFile(fileManager.activeFile, fileManager.files[fileManager.activeFile])
+    }
   }
 
   // Wallet connection handler
@@ -333,6 +378,7 @@ export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
             onConnectWallet={handleConnectWallet}
             onSelectContract={compiler.setSelectedContract}
             onShowDeployModal={() => deployer.setShowDeployModal(true)}
+            onDeploy={handleDeploy} // 직접 배포 함수 전달
           />
 
           <DeployedContracts
@@ -350,7 +396,14 @@ export function IDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
       <CodeEditor
         activeFile={fileManager.activeFile}
         code={fileManager.files[fileManager.activeFile]}
-        onChange={(code) => fileManager.updateFileContent(fileManager.activeFile, code)}
+        onChange={(code) => {
+          const fileName = fileManager.activeFile
+          fileManager.updateFileContent(fileName, code)
+          // 프로젝트 파일 업데이트 콜백 호출
+          if (onUpdateFile && activeProject) {
+            onUpdateFile(fileName, code)
+          }
+        }}
         onCompile={handleCompile}
         isCompiling={compiler.isCompiling}
         onSaveFile={handleSaveFile}
