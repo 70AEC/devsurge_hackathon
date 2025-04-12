@@ -13,7 +13,7 @@ interface RagAsset {
   mediaUrl: string
 }
 
-export default function RagSelector({ onSelect }: { onSelect: (items: any[]) => void }) {
+export default function RagSelector({ onSelect }: { onSelect: (items: any[], mediaUrl: string) => void }){
   const [ragList, setRagList] = useState<RagAsset[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -44,8 +44,8 @@ export default function RagSelector({ onSelect }: { onSelect: (items: any[]) => 
         .filter(Boolean)
         .map((line) => JSON.parse(line))
 
-      onSelect(parsed)
-      toast({ title: '✅ RAG 적용 완료', description: `${parsed.length}개 항목` })
+        onSelect(parsed, mediaUrl) 
+              toast({ title: '✅ RAG 적용 완료', description: `${parsed.length}개 항목` })
     } catch (err) {
       toast({ title: 'RAG 파싱 실패', description: String(err), variant: 'destructive' })
     }
