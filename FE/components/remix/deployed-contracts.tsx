@@ -2,7 +2,8 @@
 
 import { AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
-import { Copy, FileCode } from "lucide-react"
+import { Copy, FileCode, Check } from "lucide-react"
+import { useState } from "react"
 
 interface DeployedContract {
   name: string
@@ -18,10 +19,22 @@ interface DeployedContract {
 interface DeployedContractsProps {
   contracts: DeployedContract[]
   onViewABI: (contract: DeployedContract) => void
-  onCopyAddress: (text: string) => void
+  onCopyAddress: (text: string, label: string) => void
 }
 
 export function DeployedContracts({ contracts, onViewABI, onCopyAddress }: DeployedContractsProps) {
+  const [copiedAddresses, setCopiedAddresses] = useState<Record<string, boolean>>({})
+
+  const handleCopyAddress = (address: string, contractName: string) => {
+    onCopyAddress(address, `${contractName} address`)
+    setCopiedAddresses((prev) => ({ ...prev, [address]: true }))
+
+    // Reset copied state after 2 seconds
+    setTimeout(() => {
+      setCopiedAddresses((prev) => ({ ...prev, [address]: false }))
+    }, 2000)
+  }
+
   return (
     <AccordionItem value="deployed" className="border-b border-gray-800">
       <AccordionTrigger className="px-4 py-2 text-sm font-medium hover:bg-gray-800 hover:no-underline">
@@ -47,11 +60,15 @@ export function DeployedContracts({ contracts, onViewABI, onCopyAddress }: Deplo
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 text-gray-300 hover:text-white hover:bg-gray-700"
-                      onClick={() => onCopyAddress(contract.address)}
+                      className="h-6 w-6 p-0 text-gray-300 hover:text-white hover:bg-gray-700 transition-all duration-200"
+                      onClick={() => handleCopyAddress(contract.address, contract.name)}
                       title="Copy Address"
                     >
-                      <Copy className="h-3 w-3" />
+                      {copiedAddresses[contract.address] ? (
+                        <Check className="h-3 w-3 text-green-400" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
                     </Button>
                     <Button
                       variant="ghost"

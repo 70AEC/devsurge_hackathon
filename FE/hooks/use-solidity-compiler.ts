@@ -88,7 +88,7 @@ export function useSolidityCompiler(initialCode: string) {
         // Remove the "v" prefix if it exists
         const formattedVersion = compilerVersion.startsWith("v") ? compilerVersion.substring(1) : compilerVersion
 
-        console.log(`Compiling with Solidity version: ${formattedVersion}`)
+        console.log(`Compiling file: ${fileName} with Solidity version: ${formattedVersion}`)
 
         const response = await fetch("/api/compile", {
           method: "POST",
@@ -101,6 +101,7 @@ export function useSolidityCompiler(initialCode: string) {
             version: formattedVersion,
             optimize: optimizationEnabled,
             runs: 200,
+            // Let the API extract the contract name from the source code
           }),
         })
 

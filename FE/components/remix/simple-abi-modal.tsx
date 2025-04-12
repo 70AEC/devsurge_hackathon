@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Copy, X } from "lucide-react"
+import { Copy, X, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -11,13 +11,14 @@ interface SimpleABIModalProps {
   contractName: string
   abi: any
   bytecode: string
-  onCopy: (text: string) => void
+  onCopy: (text: string, label: string) => void
 }
 
 export function SimpleABIModal({ isOpen, onClose, contractName, abi, bytecode, onCopy }: SimpleABIModalProps) {
   const [formattedABI, setFormattedABI] = useState<string>("")
   const [formattedBytecode, setFormattedBytecode] = useState<string>("")
   const [abiItems, setAbiItems] = useState<any[]>([])
+  const [copiedItems, setCopiedItems] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     console.log("SimpleABIModal props:", { contractName, isOpen })
@@ -67,7 +68,20 @@ export function SimpleABIModal({ isOpen, onClose, contractName, abi, bytecode, o
       console.warn("Bytecode is undefined or null")
       setFormattedBytecode("No bytecode available")
     }
+
+    // Reset copied states when modal opens/closes or contract changes
+    setCopiedItems({})
   }, [abi, bytecode, contractName, isOpen])
+
+  const handleCopy = (text: string, label: string) => {
+    onCopy(text, label)
+    setCopiedItems((prev) => ({ ...prev, [label]: true }))
+
+    // Reset copied state after 2 seconds
+    setTimeout(() => {
+      setCopiedItems((prev) => ({ ...prev, [label]: false }))
+    }, 2000)
+  }
 
   if (!isOpen) return null
 
@@ -109,10 +123,19 @@ export function SimpleABIModal({ isOpen, onClose, contractName, abi, bytecode, o
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs text-white border-gray-600 hover:bg-gray-700 bg-gray-800"
-                  onClick={() => onCopy(formattedABI)}
+                  className="h-7 text-xs text-white border-gray-600 hover:bg-gray-700 bg-gray-800 transition-all duration-200"
+                  onClick={() => handleCopy(formattedABI, "ABI")}
                 >
-                  <Copy className="h-3 w-3 mr-1" /> Copy ABI
+                  {copiedItems["ABI"] ? (
+                    <>
+                      <Check className="h-3 w-3 mr-1 text-green-400" />
+                      <span className="text-green-400">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3 mr-1" /> Copy ABI
+                    </>
+                  )}
                 </Button>
               </div>
               <div className="border border-gray-700 rounded-md bg-gray-800 p-4 overflow-auto max-h-[50vh]">
@@ -245,10 +268,19 @@ export function SimpleABIModal({ isOpen, onClose, contractName, abi, bytecode, o
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs text-white border-gray-600 hover:bg-gray-700 bg-gray-800"
-                  onClick={() => onCopy(bytecode)}
+                  className="h-7 text-xs text-white border-gray-600 hover:bg-gray-700 bg-gray-800 transition-all duration-200"
+                  onClick={() => handleCopy(bytecode, "Bytecode")}
                 >
-                  <Copy className="h-3 w-3 mr-1" /> Copy Bytecode
+                  {copiedItems["Bytecode"] ? (
+                    <>
+                      <Check className="h-3 w-3 mr-1 text-green-400" />
+                      <span className="text-green-400">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3 mr-1" /> Copy Bytecode
+                    </>
+                  )}
                 </Button>
               </div>
               <div className="border border-gray-700 rounded-md bg-gray-800 p-4 overflow-auto max-h-[50vh]">

@@ -92,6 +92,7 @@ export function RemixIDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
 
   // Compile handler
   const handleCompile = () => {
+    // 현재 선택된 파일의 내용과 파일명을 컴파일러에 전달
     compiler.compile(fileManager.files[fileManager.activeFile], fileManager.activeFile).then((success) => {
       if (success && compiler.compiledContracts) {
         // Save compilation result
@@ -192,6 +193,22 @@ export function RemixIDE({ initialCode, generatedFiles = {} }: RemixIDEProps) {
             onCheckStatus={compiler.checkServerStatus}
             isServerConnected={compiler.isServerConnected}
           />
+
+          {/* 파일 선택 드롭다운 추가 */}
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-gray-400 block mb-1">Source File</label>
+          </div>
+          <select
+            className="w-full bg-gray-800 border border-gray-700 rounded-md text-sm p-1.5 text-white"
+            value={fileManager.activeFile}
+            onChange={(e) => fileManager.selectFile(e.target.value)}
+          >
+            {Object.keys(fileManager.files).map((fileName) => (
+              <option key={fileName} value={fileName}>
+                {fileName}
+              </option>
+            ))}
+          </select>
 
           <div className="flex items-center justify-between">
             <label className="text-xs text-gray-400 block mb-1">Compiler Version</label>

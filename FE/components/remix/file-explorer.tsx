@@ -60,7 +60,7 @@ export function FileExplorer({
             {Object.keys(files).map((filename) => (
               <li
                 key={filename}
-                className={`text-sm flex items-center justify-between p-1 rounded cursor-pointer ${
+                className={`text-sm flex items-center justify-between p-1 rounded cursor-pointer group ${
                   activeFile === filename ? "bg-gray-800 text-purple-400" : "text-gray-400 hover:bg-gray-800"
                 }`}
               >

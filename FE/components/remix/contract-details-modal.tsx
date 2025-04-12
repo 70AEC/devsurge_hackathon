@@ -1,6 +1,6 @@
 "use client"
 
-import { Copy } from "lucide-react"
+import { Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useEffect, useState } from "react"
@@ -16,7 +16,7 @@ interface ContractDetailsModalProps {
     txHash: string
   } | null
   onClose: () => void
-  onCopy: (text: string) => void
+  onCopy: (text: string, label: string) => void
   onUseInFrontend: () => void
 }
 
@@ -29,6 +29,7 @@ export function ContractDetailsModal({
 }: ContractDetailsModalProps) {
   const [formattedABI, setFormattedABI] = useState<string>("")
   const [formattedBytecode, setFormattedBytecode] = useState<string>("")
+  const [copiedItems, setCopiedItems] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (contract?.abi) {
@@ -54,7 +55,20 @@ export function ContractDetailsModal({
         setFormattedBytecode("Error formatting bytecode")
       }
     }
-  }, [contract])
+
+    // Reset copied states when modal opens/closes or contract changes
+    setCopiedItems({})
+  }, [contract, isOpen])
+
+  const handleCopy = (text: string, label: string) => {
+    onCopy(text, label)
+    setCopiedItems((prev) => ({ ...prev, [label]: true }))
+
+    // Reset copied state after 2 seconds
+    setTimeout(() => {
+      setCopiedItems((prev) => ({ ...prev, [label]: false }))
+    }, 2000)
+  }
 
   if (!isOpen || !contract) return null
 
@@ -92,10 +106,14 @@ export function ContractDetailsModal({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 text-gray-300 hover:text-white hover:bg-gray-700"
-                      onClick={() => onCopy(contract.address)}
+                      className="h-6 w-6 p-0 text-gray-300 hover:text-white hover:bg-gray-700 transition-all duration-200"
+                      onClick={() => handleCopy(contract.address, "Address")}
                     >
-                      <Copy className="h-3 w-3" />
+                      {copiedItems["Address"] ? (
+                        <Check className="h-3 w-3 text-green-400" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -108,10 +126,14 @@ export function ContractDetailsModal({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 text-gray-300 hover:text-white hover:bg-gray-700"
-                      onClick={() => onCopy(contract.txHash)}
+                      className="h-6 w-6 p-0 text-gray-300 hover:text-white hover:bg-gray-700 transition-all duration-200"
+                      onClick={() => handleCopy(contract.txHash, "Transaction Hash")}
                     >
-                      <Copy className="h-3 w-3" />
+                      {copiedItems["Transaction Hash"] ? (
+                        <Check className="h-3 w-3 text-green-400" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -134,20 +156,38 @@ export function ContractDetailsModal({
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full justify-start text-white bg-gray-800 border-gray-700"
-                onClick={() => onCopy(formattedABI)}
+                className="w-full justify-start text-white bg-gray-800 border-gray-700 group"
+                onClick={() => handleCopy(formattedABI, "ABI")}
               >
-                <Copy className="h-4 w-4 mr-2" />
-                Copy ABI
+                {copiedItems["ABI"] ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2 text-green-400" />
+                    <span className="text-green-400">ABI Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy ABI
+                  </>
+                )}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full justify-start text-white bg-gray-800 border-gray-700"
-                onClick={() => onCopy(contract.bytecode)}
+                className="w-full justify-start text-white bg-gray-800 border-gray-700 group"
+                onClick={() => handleCopy(contract.bytecode, "Bytecode")}
               >
-                <Copy className="h-4 w-4 mr-2" />
-                Copy Bytecode
+                {copiedItems["Bytecode"] ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2 text-green-400" />
+                    <span className="text-green-400">Bytecode Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Bytecode
+                  </>
+                )}
               </Button>
             </div>
           </div>
