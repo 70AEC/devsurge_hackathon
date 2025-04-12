@@ -32,9 +32,22 @@ contract SimpleStorage {
 }`
 
 export function CodePanel({ activeTab, setActiveTab, generatedCode = {} }: CodePanelProps) {
-  // 렌더 시점에 최초 파일의 내용을 계산해서 사용
+  const [nextFiles, setNextFiles] = useState<Record<string, string>>({})
+
   const firstFileName = Object.keys(generatedCode)[0]
   const initialCode = firstFileName ? generatedCode[firstFileName] : DEFAULT_CODE
+
+  const downloadProject = () => {
+    const zip = new JSZip()
+
+    for (const fileName in generatedCode) {
+      zip.file(fileName, generatedCode[fileName])
+    }
+
+    zip.generateAsync({ type: 'blob' }).then((content) => {
+      FileSaver.saveAs(content, 'web3-project.zip')
+    })
+  }
 
   return (
     <div className="flex flex-col h-full w-full bg-gray-900">
