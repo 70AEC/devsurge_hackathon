@@ -49,7 +49,7 @@ export default function UseRagPage() {
       const total = parseEther('0.001') // 0.001 IP
       let adminAmount = total
 
-      // 🪙 Approve spend first
+      // // 🪙 Approve spend first
       // await client.wipToken.approve({
       //   spender: ADMIN_ADDRESS,
       //   amount: total,
@@ -67,7 +67,7 @@ export default function UseRagPage() {
       //   })
       // }
 
-      // // 🏛️ Admin에게 나머지 금액 전송
+      // // // 🏛️ Admin에게 나머지 금액 전송
       // await client.wipToken.transfer({
       //   recipient: ADMIN_ADDRESS,
       //   amount: adminAmount,

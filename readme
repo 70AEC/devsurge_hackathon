@@ -1,0 +1,79 @@
+🛠 Setup Instructions
+1. Common Installation (Run in each folder)
+In each folder (preview-backend, BE, FE), run the following commands:
+
+nvm use 22
+
+npm install --force
+
+2. How to Run
+📦 Preview Backend
+cd preview-backend
+
+node --loader ts-node/esm index.ts
+
+⚙️ Solidity Compiler Backend
+cd BE
+
+npm run dev
+
+🌐 Frontend
+cd FE
+
+npm run dev
+
+🚀 Features
+AI-Assisted Development
+Build smart contracts and frontend components faster with DeepSeek and RAG-powered AI support.
+
+Solidity Compiler & Deployment Server
+A backend service dynamically spins up a dedicated compiler server to compile and deploy contracts.
+
+Frontend Preview Server
+The backend launches a server to serve the frontend preview in real time for testing and iteration.
+
+RAG to IP via Story Chain
+Generated RAG data can be published to the Story Chain as registered intellectual property (IP).
+
+Revenue Sharing on the Chain
+When RAG content is used on the chain, automated royalty distribution is triggered.
+
+Download Final dApp
+Export the complete frontend code as a downloadable zip file, ready for production deployment.
+
+🧰 Tech Stack
+🧠 AI & Blockchain
+DeepSeek – AI for smart code generation and developer assistance
+
+RAG (Retrieval-Augmented Generation) – Smart context-aware AI data retrieval
+
+Story Chain – Blockchain layer for IP registration and royalty logic
+
+🛠 Backend
+Node.js (v22) – JavaScript runtime
+
+Express – Lightweight backend framework
+
+TypeScript – Type-safe server logic
+
+Solc – Solidity contract compiler
+
+ts-node/esm – TypeScript loader for the preview backend
+
+🎨 Frontend
+Next.js – Full-stack React framework for building modern web apps
+
+shadcn/ui – Elegant and accessible UI components
+
+Tailwind CSS – Utility-first styling framework
+
+TypeScript – Type-safe frontend development
+
+Vite (for preview) – Ultra-fast dev server and bundler (in the preview system)
+
+⚙️ Tooling & Deployment
+nvm – Node version management
+
+npm – Package manager
+
+Zip Exporter – Generates a downloadable .zip of the final dApp build
